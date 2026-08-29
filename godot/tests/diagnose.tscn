@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_diag"]
+[ext_resource type="Script" path="res://tests/diagnose.gd" id="2_diag"]
+
+[node name="DiagnoseRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_diag")]
+
+[node name="Diagnoser" type="Node" parent="." node_paths=PackedStringArray("container")]
+script = ExtResource("2_diag")
+container = NodePath("../SubViewportContainer")

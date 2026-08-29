@@ -1,0 +1,42 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot
+        run: |
+          VERSION=4.7.2
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${VERSION}-stable/Godot_v${VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv Godot_v${VERSION}-stable_linux.x86_64 /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+          godot --version
+
+      - name: Import assets
+        working-directory: godot
+        run: godot --headless --import
+
+      - name: Compile with warnings as errors
+        working-directory: godot
+        run: |
+          # Every warning is set to error in project.godot, so any script
+          # problem shows up here as output. No output means clean.
+          output=$(godot --headless --quit-after 120 2>&1 | grep -v '^Godot Engine' || true)
+          if [ -n "$output" ]; then
+            echo "$output"
+            exit 1
+          fi
+          echo "clean"
+
+      - name: Run the self-test
+        working-directory: godot
+        run: godot --headless tests/verify.tscn --quit-after 400

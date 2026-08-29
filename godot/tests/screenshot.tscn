@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_shot"]
+[ext_resource type="Script" path="res://tests/screenshot.gd" id="2_shot"]
+
+[node name="ScreenshotRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_shot")]
+
+[node name="Shooter" type="Node" parent="."]
+script = ExtResource("2_shot")

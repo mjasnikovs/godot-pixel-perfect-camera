@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_verify"]
+[ext_resource type="Script" path="res://tests/verify.gd" id="2_verify"]
+
+[node name="VerifyRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_verify")]
+
+[node name="Verifier" type="Node" parent="." node_paths=PackedStringArray("container", "sub_viewport")]
+script = ExtResource("2_verify")
+container = NodePath("../SubViewportContainer")
+sub_viewport = NodePath("../SubViewportContainer/SubViewport")

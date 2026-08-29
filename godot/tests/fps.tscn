@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_fps"]
+[ext_resource type="Script" path="res://tests/fps.gd" id="2_fps"]
+
+[node name="FpsRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_fps")]
+
+[node name="Fps" type="Node" parent="."]
+script = ExtResource("2_fps")
