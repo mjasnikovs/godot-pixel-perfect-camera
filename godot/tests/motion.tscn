@@ -7,6 +7,5 @@
 
 [node name="SubViewportContainer" parent="." instance=ExtResource("1_motion")]
 
-[node name="Motion" type="Node" parent="." node_paths=PackedStringArray("container")]
+[node name="Motion" type="Node" parent="."]
 script = ExtResource("2_motion")
-container = NodePath("../SubViewportContainer")

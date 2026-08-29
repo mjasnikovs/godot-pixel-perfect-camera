@@ -4,8 +4,6 @@ extends Node
 
 const SAMPLE_FRAMES: int = 90
 
-@export var container: SubViewportContainer = null
-
 var _frame: int = 0
 var _last_screen: Vector2 = Vector2.ZERO
 var _steps: Dictionary[int, int] = {}

@@ -191,9 +191,70 @@ container = NodePath("../SubViewportContainer")
 sub_viewport = NodePath("../SubViewportContainer/SubViewport")
 ```
 
-The other three scenes follow the same shape: root `Node`, an instance of
-`scenes/main.tscn` named `SubViewportContainer`, and the test node. Only `diagnose`
-needs a `container` node path; `motion` and `fps` need none.
+### `tests/diagnose.tscn`
+
+```
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_diag"]
+[ext_resource type="Script" path="res://tests/diagnose.gd" id="2_diag"]
+
+[node name="DiagnoseRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_diag")]
+
+[node name="Diagnoser" type="Node" parent="." node_paths=PackedStringArray("container")]
+script = ExtResource("2_diag")
+container = NodePath("../SubViewportContainer")
+```
+
+### `tests/motion.tscn`
+
+```
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_motion"]
+[ext_resource type="Script" path="res://tests/motion.gd" id="2_motion"]
+
+[node name="MotionRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_motion")]
+
+[node name="Motion" type="Node" parent="."]
+script = ExtResource("2_motion")
+```
+
+### `tests/fps.tscn`
+
+```
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_fps"]
+[ext_resource type="Script" path="res://tests/fps.gd" id="2_fps"]
+
+[node name="FpsRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_fps")]
+
+[node name="Fps" type="Node" parent="."]
+script = ExtResource("2_fps")
+```
+
+### `tests/screenshot.tscn`
+
+```
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_shot"]
+[ext_resource type="Script" path="res://tests/screenshot.gd" id="2_shot"]
+
+[node name="ScreenshotRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_shot")]
+
+[node name="Shooter" type="Node" parent="."]
+script = ExtResource("2_shot")
+```
 
 ### `tests/verify.gd`
 
@@ -596,8 +657,6 @@ extends Node
 ## Logs how the player actually lands on the pixel grid while walking.
 
 const SAMPLE_FRAMES: int = 90
-
-@export var container: SubViewportContainer = null
 
 var _frame: int = 0
 var _last_screen: Vector2 = Vector2.ZERO

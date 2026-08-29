@@ -63,25 +63,30 @@ project refuses to run if one fires.
 
 ## Read it
 
-- **[skill/SKILL.md](skill/SKILL.md)** — the whole technique in 190 lines. Start here.
-- [skill/reference/camera.md](skill/reference/camera.md) — full camera script, camera
+- **[godot-pixel-camera/SKILL.md](godot-pixel-camera/SKILL.md)** — the whole technique in 190 lines. Start here.
+- [godot-pixel-camera/reference/camera.md](godot-pixel-camera/reference/camera.md) — full camera script, camera
   triggers, shake, time effects, the autoload pattern, UI placement.
-- [skill/reference/traps.md](skill/reference/traps.md) — snapping, physics
+- [godot-pixel-camera/reference/traps.md](godot-pixel-camera/reference/traps.md) — snapping, physics
   interpolation, tiling window managers, frame rate on multi-monitor Wayland, and the
   measurements behind every claim.
-- [skill/reference/verify.md](skill/reference/verify.md) — strict typing settings and
+- [godot-pixel-camera/reference/verify.md](godot-pixel-camera/reference/verify.md) — strict typing settings and
   the full test harness.
 
-## Use it as a Claude Code skill
+## Use it as an Agent Skill
 
-`skill/` is a [Claude Code](https://claude.ai/code) skill. Install it by linking:
+`godot-pixel-camera/` follows the [Agent Skills](https://agentskills.io/specification)
+standard. Link it into whichever agent you use:
 
 ```sh
-ln -s "$PWD/skill" ~/.claude/skills/godot-pixel-camera
+ln -s "$PWD/godot-pixel-camera" ~/.claude/skills/godot-pixel-camera   # Claude Code
+ln -s "$PWD/godot-pixel-camera" ~/.pi/agent/skills/godot-pixel-camera # pi
+ln -s "$PWD/godot-pixel-camera" ~/.agents/skills/godot-pixel-camera   # shared
 ```
 
-It then fires on its own when you work on a Godot pixel-art camera. The 190-line
-`SKILL.md` loads into context; the reference files load only when needed.
+It then fires on its own when you work on a Godot pixel-art camera. Only the 190-line
+`SKILL.md` sits in context; the reference files load on demand.
+
+It is also just markdown. Read it directly if you would rather not install anything.
 
 ## License
 
