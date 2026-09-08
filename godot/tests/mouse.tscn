@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_mouse"]
+[ext_resource type="Script" path="res://tests/mouse.gd" id="2_mouse"]
+
+[node name="MouseRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_mouse")]
+
+[node name="Mouse" type="Node" parent="." node_paths=PackedStringArray("container", "sub_viewport")]
+script = ExtResource("2_mouse")
+container = NodePath("../SubViewportContainer")
+sub_viewport = NodePath("../SubViewportContainer/SubViewport")

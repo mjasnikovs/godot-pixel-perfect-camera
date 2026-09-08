@@ -137,7 +137,8 @@ func _physics_process(delta: float) -> void:
 
 	offset = Vector2.ZERO
 	global_position = rounded_position
-	_shader_material.set_shader_parameter("cam_offset", rounded_position - desired_position)
+	cam_offset = rounded_position - desired_position
+	_shader_material.set_shader_parameter("cam_offset", cam_offset)
 ```
 
 `_physics_process`, on the **same clock** as everything it follows.
@@ -145,7 +146,45 @@ func _physics_process(delta: float) -> void:
 
 Full script, camera triggers, shake and time effects: `reference/camera.md`.
 
-## The five bugs
+## Mouse input
+
+Three offsets sit between the pointer and the world. All three are measured on
+Godot 4.7.2 by `tests/mouse.tscn`.
+
+| Stage | What to do |
+|---|---|
+| Window 1280x720 → root viewport 320x180 | **nothing.** Godot has already divided `event.position` by 4 |
+| Root viewport → SubViewport | `+1, +1` by hand, unless the event reached a node inside the SubViewport, where the container has already added it |
+| Rounded camera → displayed image | subtract `cam_offset`, the shader's sub-pixel shift |
+
+```gdscript
+# On the root or a CanvasLayer. event.position is already in game pixels.
+func _unhandled_input(event: InputEvent) -> void:
+	var motion: InputEventMouseMotion = event as InputEventMouseMotion
+	if motion == null:
+		return
+	var centre: Vector2 = Vector2(sub_viewport.size) * 0.5
+	var world: Vector2 = (camera.global_position + motion.position + Vector2.ONE
+		- centre - camera.cam_offset)
+```
+
+Inside the SubViewport the engine does the first two stages for you, so only the
+last one is left:
+
+```gdscript
+var world: Vector2 = camera.get_global_mouse_position() - camera.cam_offset
+```
+
+Never divide by a window scale. That division belongs to the *other* common setup —
+`viewport` stretch with a doubled base viewport — and doing it here puts every mouse
+position twice as far from the pointer as it should be. This setup has no 2x scale
+anywhere. See bug 6.
+
+Cursor drawing: inside the SubViewport it is a game object, nearest-scaled and moving
+with the world. On the `CanvasLayer` it is crisp and stationary. `Control` UI on the
+CanvasLayer needs no conversion at all, Control input arrives in local space.
+
+## The six bugs
 
 Present in nearly every existing implementation. Check these first when something
 feels wrong.
@@ -157,6 +196,7 @@ feels wrong.
 | 3 | Camera in `_process` | followed character steps **backwards** ~1 frame in 6 on a high-refresh screen | `_physics_process` |
 | 4 | Shake written to `Camera2D.offset` | shake looks mushy, sprites shift against each other | fold shake in before the round; `offset` stays zero |
 | 5 | Window left resizable | a tiling WM resizes it, integer factor collapses 4x to 1x | `window/size/resizable=false` |
+| 6 | Mouse position divided by the window scale | cursor sits twice as far from the pointer as it should | never divide; `+1` and `-cam_offset` instead |
 
 Bug 1 makes the world judder. Bug 3 makes the character judder against the world.
 Those are the two you feel.
@@ -183,4 +223,4 @@ fraction the shader already applies, and carries four open engine bugs. Leave it
 - `reference/traps.md` — snapping, physics interpolation, tiling window managers,
   frame rate on multi-monitor Wayland, and the measurements behind every claim above.
 - `reference/verify.md` — the strict-typing settings and the full test harness that
-  proves the result.
+  proves the result, including the mouse measurements.

@@ -30,6 +30,7 @@ godot --headless tests/verify.tscn    # self-test, exit 0 = pass
 godot tests/screenshot.tscn           # write a PNG to user://screenshot.png
 godot tests/diagnose.tscn             # measure sub-pixel steps per game pixel
 godot --headless tests/motion.tscn    # measure the player's on-screen stepping
+godot tests/mouse.tscn                # measure where the mouse lands, exit 0 = pass
 ```
 
 Controls: `A` / `D` or arrows to move, `Space` / `W` to jump, `E` to shake.
@@ -62,6 +63,7 @@ scripts/global.gd           autoload, typed refs registered by the nodes
 scenes/main.tscn            SubViewportContainer + CanvasLayer + SubViewport
 scenes/world.tscn           level content
 tests/verify.gd             25 headless assertions
+tests/mouse.gd              mouse position -> world position, measured on real frames
 ```
 
 ## Strictness

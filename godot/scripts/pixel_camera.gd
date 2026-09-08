@@ -32,6 +32,10 @@ const NOISE_SPEED: float = 10.0
 
 var target: Node2D = null
 
+## Sub-pixel shift the shader is applying this frame, -0.5 to +0.5.
+## Mouse-to-world conversions must subtract it. See "Mouse input" in the skill.
+var cam_offset: Vector2 = Vector2.ZERO
+
 var _actual_position: Vector2 = Vector2.ZERO
 ## Current shake amount in game pixels. Decays to zero on its own.
 var shake_strength: float = 0.0
@@ -126,4 +130,5 @@ func _physics_process(delta: float) -> void:
 
 	offset = Vector2.ZERO
 	global_position = rounded_position
-	_shader_material.set_shader_parameter("cam_offset", rounded_position - desired_position)
+	cam_offset = rounded_position - desired_position
+	_shader_material.set_shader_parameter("cam_offset", cam_offset)
