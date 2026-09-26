@@ -7,7 +7,6 @@
 
 [node name="SubViewportContainer" parent="." instance=ExtResource("1_diag")]
 
-[node name="Diagnoser" type="Node" parent="." node_paths=PackedStringArray("container", "sub_viewport")]
+[node name="Diagnoser" type="Node" parent="." node_paths=PackedStringArray("container")]
 script = ExtResource("2_diag")
 container = NodePath("../SubViewportContainer")
-sub_viewport = NodePath("../SubViewportContainer/SubViewport")

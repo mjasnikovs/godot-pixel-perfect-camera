@@ -1,26 +1,24 @@
 class_name Diagnose extends Node
 
-# Measures two things on real rendered frames, across several configurations:
-#   steps/pixel - how many sub-pixel positions per game pixel actually reach the
-#                 screen. Higher is smoother. 1 means the shader does nothing.
-#   square      - whether every game pixel is the same size on screen at every
-#                 sub-pixel offset. Anything else is smearing.
-# Needs a real window. Output goes to stderr, the channel godot-code-style allows.
+# Checks two things on real rendered frames, with the camera parked on a whole pixel:
+#   steps/pixel - every sub-pixel position per game pixel reaches the screen, one per
+#                 screen pixel of the scale factor.
+#   square      - every game pixel is the same size on screen at every sub-pixel
+#                 offset. Anything else is smearing.
+# Needs a real window. Silent with exit 0 is a pass; a failure prints the measured
+# value with printerr and exits 1.
 
 const GAME_WIDTH: float = 320.0
-const GAME_SIZE: Vector2 = Vector2(320.0, 180.0)
 const STEPS: int = 16
 const PROBE_OFFSETS: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
 
 @export var container: SubViewportContainer
-@export var sub_viewport: SubViewport
 
 var _started: bool = false
 
 
 func _ready() -> void:
 	assert(container, "diagnose.gd - @export container is not set in the editor on: " + self.name)
-	assert(sub_viewport, "diagnose.gd - @export sub_viewport is not set in the editor on: " + self.name)
 
 
 func _process(_delta: float) -> void:
@@ -37,35 +35,7 @@ func _run() -> void:
 	if Global.player != null:
 		Global.player.set_physics_process(false)
 
-	var window: Window = get_window()
-	var root_rid: RID = get_viewport().get_viewport_rid()
-
-	printerr("\nwindow %v\n" % window.size)
-	printerr("  steps/pixel is measured out of the scale factor. Equal = perfectly")
-	printerr("  smooth. Half = the camera judders in half-pixel hops.\n")
-
-	await _report("A. as shipped")
-
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
-	await _report("B. A, root vertex snap off")
-
-	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, true)
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, true)
-	await _report("C. A, root transform + vertex snap")
-
-	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, false)
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
-	sub_viewport.snap_2d_vertices_to_pixel = true
-	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	window.content_scale_size = GAME_SIZE
-	container.scale = Vector2.ONE
-	container.position = Vector2(-1.0, -1.0)
-	await _report("D. canvas_items, base 320x180")
-
-	get_tree().quit(0)
-
-
-func _report(label: String) -> void:
+	var failures: Array[String] = []
 	var first: Image = await _render(Vector2.ZERO)
 	var scale_factor: int = int(float(first.get_width()) / GAME_WIDTH)
 
@@ -76,19 +46,18 @@ func _report(label: String) -> void:
 		if current != previous:
 			distinct += 1
 		previous = current
+	if distinct != scale_factor:
+		failures.append("steps/pixel %d of %d: the camera judders in coarser hops" % [distinct, scale_factor])
 
-	var worst: float = 0.0
 	for offset: float in PROBE_OFFSETS:
 		var image: Image = await _render(Vector2(offset, 0.0))
-		worst = maxf(worst, _bad_run_ratio(image, scale_factor))
+		var ratio: float = _bad_run_ratio(image, scale_factor)
+		if !is_zero_approx(ratio):
+			failures.append("at cam_offset %.3f, %.1f%% of colour runs are uneven" % [offset, ratio * 100.0])
 
-	var evenness: String = "square" if is_zero_approx(worst) else "UNEVEN (%.1f%% of runs)" % (worst * 100.0)
-	printerr(
-		(
-			"  %-34s render %4dx%-4d  %dx  steps/pixel %d/%d   %s"
-			% [label, first.get_width(), first.get_height(), scale_factor, distinct, scale_factor, evenness]
-		)
-	)
+	for failure: String in failures:
+		printerr("FAIL  %s" % failure)
+	get_tree().quit(0 if failures.is_empty() else 1)
 
 
 func _render(offset: Vector2) -> Image:
@@ -100,7 +69,8 @@ func _render(offset: Vector2) -> Image:
 
 
 # Counts runs of identical colour along many scanlines. On a clean integer upscale
-# every run length is a multiple of the scale factor.
+# every run length is a multiple of the scale factor, except the two runs the screen
+# edges cut off: the image slides by up to a game pixel, so the edge run is partial.
 func _bad_run_ratio(image: Image, scale_factor: int) -> float:
 	var bad: int = 0
 	var total: int = 0
@@ -108,18 +78,19 @@ func _bad_run_ratio(image: Image, scale_factor: int) -> float:
 	var width: int = image.get_width()
 	for row: int in range(int(float(height) * 0.55), int(float(height) * 0.95), 3):
 		var run: int = 1
+		var run_start: int = 0
 		var previous: Color = image.get_pixel(0, row)
 		for x: int in range(1, width):
 			var current: Color = image.get_pixel(x, row)
 			if current == previous:
 				run += 1
 				continue
-			# Ignore the two runs clipped by the screen edges.
-			if x < width - 1:
+			if run_start > 0 and x < width - 1:
 				total += 1
 				if run % scale_factor != 0:
 					bad += 1
 			run = 1
+			run_start = x
 			previous = current
 	if total == 0:
 		return -1.0

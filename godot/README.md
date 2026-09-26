@@ -26,14 +26,18 @@ six on a 144Hz screen, which looks like the sprite is broken.
 
 ```sh
 godot                       # play
-godot --headless tests/verify.tscn    # self-test, exit 0 = pass
+godot --headless tests/verify.tscn    # the invariants
 godot tests/screenshot.tscn           # write a PNG to user://screenshot.png
-godot tests/diagnose.tscn             # measure sub-pixel steps per game pixel
-godot --headless tests/motion.tscn    # measure the player's on-screen stepping
-godot tests/mouse.tscn                # measure where the mouse lands, exit 0 = pass
+godot tests/diagnose.tscn             # 4 of 4 sub-pixel steps, square pixels
+godot --headless tests/motion.tscn    # the player never steps backwards on screen
+godot tests/mouse.tscn                # the mouse lands on its own pixel
+godot tests/fps.tscn                  # the frame rate keeps up with physics
 gdformat --check scripts/ tests/
 gdlint scripts/ tests/
 ```
+
+Every harness prints nothing and exits 0 on a pass. A failure is printed with
+`printerr` and exits 1.
 
 Controls: `A` / `D` or arrows to move, `Space` / `W` to jump, `E` to shake.
 
@@ -51,7 +55,7 @@ back to you.
 3. A movement speed that is not a whole number of pixels per physics tick. 70 px/s
    at 60Hz is 1.167 px, so the sprite's rounding residual wobbles. 60 px/s is 1.000.
 
-`tests/motion.tscn` measures all three.
+`tests/motion.tscn` checks the first and third, `tests/verify.tscn` the second.
 
 ## Layout
 
@@ -64,7 +68,7 @@ scripts/player.gd           CharacterBody2D
 scripts/global.gd           autoload, typed refs registered by the nodes
 scenes/main.tscn            SubViewportContainer + CanvasLayer + SubViewport
 scenes/world.tscn           level content
-tests/verify.gd             41 headless assertions
+tests/verify.gd             headless invariants, every frame
 tests/mouse.gd              mouse position -> world position, measured on real frames
 tests/mouse_listener.gd     records where mouse events land inside the SubViewport
 ```

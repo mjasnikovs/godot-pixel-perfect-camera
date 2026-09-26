@@ -98,8 +98,9 @@ there. The offset can land on 2 positions per game pixel and no more.
 at the **native window resolution**. One game pixel is 4 screen pixels at 1280x720, so
 the offset lands on 4 positions per game pixel.
 
-**Measured.** `tests/diagnose.tscn` sweeps `cam_offset` from 0 to 1 game pixel in
-sixteenths and counts visually distinct frames. Window 1280x720, game 320x180, so 4 is
+**Measured.** An earlier `tests/diagnose.tscn` swept `cam_offset` from 0 to 1 game
+pixel in sixteenths and counted visually distinct frames, for each configuration below.
+Today's harness checks only the shipped one, and fails if it drops below 4 of 4. Window 1280x720, game 320x180, so 4 is
 the ceiling.
 
 | Configuration | Rasterised at | Steps per game pixel |
@@ -109,9 +110,9 @@ the ceiling.
 | same, plus transform *and* vertex snapping on the root | 640x360 | **2** of 4 |
 | **`canvas_items`, base 320x180, container scale 1** | **1280x720** | **4 of 4** |
 
-Both repos use the first row.
+The old two-repo layout used the first row; this project uses the last.
 
-The same tool walks every scanline and measures how wide each run of identical colour
+The harness also walks every scanline and checks how wide each run of identical colour
 is. Under `canvas_items` every run is a multiple of 4 except one partial column at the
 very edge of the screen — that is the hidden 1px border doing its job, not a defect.
 

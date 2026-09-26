@@ -4,9 +4,9 @@ class_name Mouse extends Node
 #   godot tests/mouse.tscn
 # Injects a mouse motion event at a known window pixel, converts it to a world
 # position with several candidate formulas, draws a marker there, then reads the
-# rendered frame back and reports how far the marker is from the pointer. Exit code
-# 0 means one formula is exact at every sub-pixel camera offset. Output goes to
-# stderr, the channel godot-code-style allows.
+# rendered frame back and measures how far the marker is from the pointer. Silent with
+# exit 0 means the `+1 -cam_offset` formula lands on the pointer's own pixel at every
+# sub-pixel camera offset; a failure is printed with printerr and exits 1.
 
 const GAME_SIZE: Vector2 = Vector2(320.0, 180.0)
 const MARKER_SIZE: int = 4
@@ -21,12 +21,6 @@ const PROBES: Array[Vector2] = [
 	Vector2(640.0, 360.0),
 	Vector2(204.0, 116.0),
 	Vector2(1084.0, 596.0),
-]
-const VARIANTS: Array[String] = [
-	"raw",
-	"+1",
-	"+1 +cam_offset",
-	"+1 -cam_offset",
 ]
 
 @export var container: SubViewportContainer
@@ -83,37 +77,21 @@ func _run() -> void:
 
 	var probe: Image = await _render()
 	_scale = float(probe.get_width()) / GAME_SIZE.x
-	printerr(
-		(
-			"\nwindow %v   render %dx%d   scale %dx   SubViewport %v   container %v\n"
-			% [
-				get_window().size,
-				probe.get_width(),
-				probe.get_height(),
-				int(_scale),
-				sub_viewport.size,
-				container.position
-			]
-		)
-	)
 
 	await _stage_window_to_root()
 	await _stage_root_to_sub_viewport()
 	await _stage_formulas()
 	await _stage_every_offset()
 
-	printerr("")
 	if _failures.is_empty():
-		printerr("all checks passed")
 		get_tree().quit(0)
 		return
 	for failure: String in _failures:
-		printerr("FAILED: %s" % failure)
+		printerr("FAIL  %s" % failure)
 	get_tree().quit(1)
 
 
 func _stage_window_to_root() -> void:
-	printerr("[stage 1] window pixel -> what the game receives (event.position)")
 	for window_pixel: Vector2 in PROBES:
 		var root_position: Vector2 = await _point_at(window_pixel)
 		var expected: Vector2 = window_pixel / _scale
@@ -125,7 +103,6 @@ func _stage_window_to_root() -> void:
 
 
 func _stage_root_to_sub_viewport() -> void:
-	printerr("\n[stage 2] root viewport -> SubViewport (who adds the container's +1?)")
 	for window_pixel: Vector2 in PROBES:
 		var root_position: Vector2 = await _point_at(window_pixel)
 		var delta: Vector2 = _listener.last_position - root_position
@@ -136,30 +113,24 @@ func _stage_root_to_sub_viewport() -> void:
 		)
 
 
+# The `+1` formula's error is exactly cam_offset at every offset: the shader shifts
+# the displayed image and the mouse is not shifted with it.
 func _stage_formulas() -> void:
-	printerr("\n[stage 3] rendered marker error in game pixels, per formula")
-	printerr("  %-18s %s" % ["formula", "cam_offset " + str(OFFSETS)])
 	var tracks_offset: bool = true
-	for variant: String in VARIANTS:
-		var cells: Array[String] = []
-		for offset: float in OFFSETS:
-			var cam_offset: Vector2 = Vector2(offset, offset)
-			_material.set_shader_parameter(&"cam_offset", cam_offset)
-			var root_position: Vector2 = await _point_at(PROBES[0])
-			var error: Vector2 = await _error_for(variant, PROBES[0], root_position, cam_offset)
-			if is_nan(error.x):
-				cells.append(" off-screen")
-				continue
-			cells.append("%+6.2f,%+6.2f" % [error.x, error.y])
-			if variant == "+1" and !error.is_equal_approx(cam_offset):
-				tracks_offset = false
-		printerr("  %-18s %s" % [variant, " ".join(cells)])
+	var worst: Vector2 = Vector2.ZERO
+	for offset: float in OFFSETS:
+		var cam_offset: Vector2 = Vector2(offset, offset)
+		_material.set_shader_parameter(&"cam_offset", cam_offset)
+		var root_position: Vector2 = await _point_at(PROBES[0])
+		var error: Vector2 = await _error_for("+1", PROBES[0], root_position, cam_offset)
+		if is_nan(error.x) or !error.is_equal_approx(cam_offset):
+			tracks_offset = false
+			worst = error
 	_material.set_shader_parameter(&"cam_offset", Vector2.ZERO)
-	_check("the displayed image is shifted by exactly cam_offset", tracks_offset)
+	_check("the displayed image is shifted by exactly cam_offset", tracks_offset, "error %v" % worst)
 
 
 func _stage_every_offset() -> void:
-	printerr("\n[stage 4] every pointer position, every sub-pixel camera offset")
 	for variant: String in ["raw", "+1 -cam_offset"]:
 		var worst: float = 0.0
 		for window_pixel: Vector2 in PROBES:
@@ -181,13 +152,11 @@ func _stage_every_offset() -> void:
 
 func _check(label: String, condition: bool, detail: String = "") -> void:
 	if condition:
-		printerr("  ok    %s" % label)
 		return
 	var line: String = label
 	if !detail.is_empty():
 		line = "%s  (%s)" % [label, detail]
 	_failures.append(line)
-	printerr("  FAIL  %s" % line)
 
 
 # Injects a motion event at a window pixel and returns the root-viewport position
@@ -212,8 +181,6 @@ func _world_for(variant: String, root_position: Vector2, cam_offset: Vector2) ->
 		world = base
 	elif variant == "+1":
 		world = base + Vector2.ONE
-	elif variant == "+1 +cam_offset":
-		world = base + Vector2.ONE + cam_offset
 	elif variant == "+1 -cam_offset":
 		world = base + Vector2.ONE - cam_offset
 	return world

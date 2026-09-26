@@ -1,10 +1,8 @@
 class_name Verify extends Node
 
 # Headless self-test. Drives the real scene and asserts the pixel-perfect invariants
-# hold every single frame. Exit code 0 means every check passed.
-#
-# Output goes to stderr: godot-code-style keeps print() out of committed code, and
-# printerr is the one channel it allows.
+# hold every single frame. Silent with exit 0 is a pass; a failure is printed with
+# printerr and exits 1, as godot-code-style's harness rule has it.
 
 const EPSILON: float = 0.0001
 const EXPECTED_VIEWPORT_SIZE: Vector2 = Vector2(322.0, 182.0)
@@ -17,7 +15,6 @@ const SCRIPT_DIRECTORIES: Array[String] = ["res://scripts/", "res://tests/"]
 @export var sub_viewport: SubViewport
 
 var _failures: Array[String] = []
-var _checks: int = 0
 var _frame: int = 0
 var _camera_start: Vector2 = Vector2.ZERO
 var _max_subpixel: float = 0.0
@@ -56,7 +53,6 @@ func _process(_delta: float) -> void:
 	elif _frame == 200:
 		_check_trigger_released()
 	elif _frame == 210:
-		printerr("\n[shake]")
 		if Global.camera != null:
 			Global.camera.apply_shake(6.0)
 		_phase = "shaking"
@@ -73,19 +69,15 @@ func _process(_delta: float) -> void:
 
 
 func _check(label: String, condition: bool, detail: String = "") -> void:
-	_checks += 1
 	if condition:
-		printerr("  ok    %s" % label)
 		return
 	var line: String = label
 	if !detail.is_empty():
 		line = "%s  (%s)" % [label, detail]
 	_failures.append(line)
-	printerr("  FAIL  %s" % line)
 
 
 func _check_every_script_compiles() -> void:
-	printerr("\n[scripts]")
 	for directory: String in SCRIPT_DIRECTORIES:
 		for file_name: String in DirAccess.get_files_at(directory):
 			if !file_name.ends_with(".gd"):
@@ -95,7 +87,6 @@ func _check_every_script_compiles() -> void:
 
 
 func _check_static_setup() -> void:
-	printerr("\n[setup]")
 	var viewport_size: Vector2 = Vector2(sub_viewport.size)
 	_check(
 		"SubViewport is %dx%d" % [EXPECTED_VIEWPORT_SIZE.x, EXPECTED_VIEWPORT_SIZE.y],
@@ -165,18 +156,19 @@ func _check_static_setup() -> void:
 
 
 func _check_follow() -> void:
-	printerr("\n[follow]")
 	_check(
 		"camera moved while following the player",
 		Global.camera != null and Global.camera.global_position != _camera_start,
 		"start %v" % _camera_start
 	)
 	_check("a sub-pixel offset was actually produced", _saw_fractional_offset, "max seen %f" % _max_subpixel)
+	# Measured 0.4992: a camera that has moved has met nearly every fraction. Far
+	# under that, the shader is not being fed each frame.
+	_check("the sub-pixel offset reached close to half a pixel", _max_subpixel > 0.4, "max seen %f" % _max_subpixel)
 	_check("camera target is the player", Global.camera != null and Global.camera.target == Global.player)
 
 
 func _check_trigger_claimed() -> void:
-	printerr("\n[camera trigger]")
 	_check(
 		"entering a trigger retargets the camera to its Marker2D",
 		Global.camera != null and Global.camera.target is Marker2D,
@@ -241,16 +233,10 @@ func _check_invariants_this_frame() -> void:
 
 
 func _report_and_quit() -> void:
-	printerr("\n[frame invariants]")
-	printerr("  frames stepped: %d" % _frame)
-	printerr("  max sub-pixel offset seen: %f" % _max_subpixel)
-	printerr("\n------------------------------------------------------------")
 	if _failures.is_empty():
-		printerr("PASS  %d checks, %d frames, 0 failures" % [_checks, _frame])
 		get_tree().quit(0)
 		return
-
-	printerr("FAIL  %d failures out of %d checks (phase: %s)" % [_failures.size(), _checks, _phase])
+	printerr("FAIL  %d failures, phase: %s" % [_failures.size(), _phase])
 	for failure: String in _failures:
 		printerr("  - %s" % failure)
 	get_tree().quit(1)

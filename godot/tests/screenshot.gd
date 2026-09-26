@@ -1,8 +1,10 @@
 class_name Screenshot extends Node
 
-# Renders the real scene and writes a PNG, so the pixel grid can be inspected:
+# Renders the real scene and writes user://screenshot.png, so a person can inspect
+# the pixel grid:
 #   godot tests/screenshot.tscn
-# Needs a real window. Headless renders nothing.
+# Needs a real window. Headless renders nothing. Silent with exit 0 once the file is
+# written; a failed write is printed with printerr and exits 1.
 
 const OUTPUT_PATH: String = "user://screenshot.png"
 const WARMUP_FRAMES: int = 45
@@ -27,10 +29,7 @@ func _process(_delta: float) -> void:
 	var image: Image = get_viewport().get_texture().get_image()
 	var save_error: int = image.save_png(OUTPUT_PATH)
 	if save_error != OK:
-		printerr("screenshot failed: %d" % save_error)
+		printerr("FAIL  could not write %s: error %d" % [OUTPUT_PATH, save_error])
 		get_tree().quit(1)
 		return
-
-	var path: String = ProjectSettings.globalize_path(OUTPUT_PATH)
-	printerr("wrote %s (%dx%d)" % [path, image.get_width(), image.get_height()])
 	get_tree().quit(0)

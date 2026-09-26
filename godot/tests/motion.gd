@@ -1,9 +1,11 @@
 class_name Motion extends Node
 
-# Logs how the player actually lands on the pixel grid while walking. Output goes
-# to stderr, the channel godot-code-style allows.
+# Walks the player right and checks how it lands on the pixel grid. Silent with exit
+# 0 means the camera is on the physics clock and the speed is a whole number of pixels
+# per tick; a failure is printed with printerr and exits 1.
 
 const SAMPLE_FRAMES: int = 90
+const EPSILON: float = 0.001
 
 var _frame: int = 0
 var _last_screen: Vector2 = Vector2.ZERO
@@ -37,23 +39,30 @@ func _process(_delta: float) -> void:
 		return
 
 	Input.action_release(&"move_right")
-	_report()
-	get_tree().quit(0)
+	get_tree().quit(_report_failures())
 
 
-func _report() -> void:
-	var physics_hz: int = Engine.physics_ticks_per_second
-	printerr("\nplayer speed: %.1f px/s at 60fps = %.3f game px per frame" % [Player.SPEED, Player.SPEED / 60.0])
-	printerr("\non-screen step sizes (player relative to camera, in game pixels):")
-	var keys: Array[int] = _steps.keys()
-	keys.sort()
-	for key: int in keys:
-		printerr("  %+d px : %d frames" % [key, _steps[key]])
+# Returns the exit code: 0 when every bound holds.
+func _report_failures() -> int:
+	var failures: Array[String] = []
+	var backwards: int = 0
+	for step: int in _steps:
+		if step < 0:
+			backwards += _steps[step]
+	if backwards > 0:
+		failures.append("the player stepped backwards on %d frames while walking forwards" % backwards)
+
+	var per_tick: float = Player.SPEED / float(Engine.physics_ticks_per_second)
+	if absf(per_tick - roundf(per_tick)) > EPSILON:
+		failures.append("the player moves %.4f px per physics tick, not a whole number" % per_tick)
 
 	var sum: float = 0.0
 	for value: float in _residuals:
 		sum += value
-	printerr("\nplayer world position is fractional on average by %.3f px" % (sum / float(_residuals.size())))
-	printerr("\nphysics ticks/sec : %d" % physics_hz)
-	printerr("screen refresh Hz : %.1f" % DisplayServer.screen_get_refresh_rate())
-	printerr("px per physics tick: %.4f  (whole numbers do not wobble)" % (Player.SPEED / float(physics_hz)))
+	var mean_residual: float = sum / float(_residuals.size())
+	if mean_residual > EPSILON:
+		failures.append("the player's world position is fractional on average by %.3f px" % mean_residual)
+
+	for failure: String in failures:
+		printerr("FAIL  %s" % failure)
+	return 0 if failures.is_empty() else 1
