@@ -14,6 +14,8 @@ description: >
 # Pixel perfect camera (Godot 4)
 
 Verified against Godot 4.7.2 by building the project and measuring the result.
+Every script follows godot-code-style and compiles with all 49 warnings as errors;
+this skill covers only the camera.
 
 The game renders at a low resolution and the window is a whole-number multiple of it.
 A low-res image can only move in whole pixels, and scaled up each jump is several
@@ -113,8 +115,8 @@ SubViewportContainer          <- root, owns the shader material, scale (1,1)
     └── PixelCamera           <- Camera2D, anchor_mode left at Drag Center
 ```
 
-Wire references with `@export` node paths and an autoload that nodes register
-themselves into. Hardcoded `get_node("A/B/C")` chains break on any rename.
+Wire references the godot-code-style way: `@export` slots, and an autoload that nodes
+register themselves into. No script holds a node path, so a rename breaks nothing.
 
 ## The camera loop
 
@@ -123,6 +125,7 @@ func _physics_process(delta: float) -> void:
 	if target == null:
 		return
 
+	# Clamped, so a single long frame cannot overshoot the target.
 	var weight: float = minf(camera_speed * delta, 1.0)
 	_actual_position = _actual_position.lerp(target.global_position, weight)
 
@@ -131,14 +134,15 @@ func _physics_process(delta: float) -> void:
 		shake_strength = lerpf(shake_strength, 0.0, SHAKE_DECAY * delta)
 		shake = _get_noise_offset(delta, shake_strength)
 
-	# One float position. One round.
+	# Shake included, everything lands in one float position rounded once.
+	# Camera2D.offset is applied after this rounding, so it stays at zero.
 	var desired_position: Vector2 = _actual_position + shake
 	var rounded_position: Vector2 = desired_position.round()
 
 	offset = Vector2.ZERO
 	global_position = rounded_position
 	cam_offset = rounded_position - desired_position
-	_shader_material.set_shader_parameter("cam_offset", cam_offset)
+	_shader_material.set_shader_parameter(&"cam_offset", cam_offset)
 ```
 
 `_physics_process`, on the **same clock** as everything it follows.
@@ -164,15 +168,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if motion == null:
 		return
 	var centre: Vector2 = Vector2(sub_viewport.size) * 0.5
-	var world: Vector2 = (camera.global_position + motion.position + Vector2.ONE
-		- centre - camera.cam_offset)
+	mouse_world = camera.global_position + motion.position + Vector2.ONE - centre - camera.cam_offset
 ```
 
 Inside the SubViewport the engine does the first two stages for you, so only the
 last one is left:
 
 ```gdscript
-var world: Vector2 = camera.get_global_mouse_position() - camera.cam_offset
+	mouse_world = camera.get_global_mouse_position() - camera.cam_offset
 ```
 
 Never divide by a window scale. That division belongs to the *other* common setup —
@@ -207,7 +210,8 @@ fraction the shader already applies, and carries four open engine bugs. Leave it
 
 ## Build order
 
-1. Project settings above, plus GDScript warnings at level `2` (`reference/verify.md`).
+1. Project settings above, plus all 49 GDScript warnings at level `2`
+   (godot-code-style, `reference/checklist.md`).
 2. Root `SubViewportContainer`, rect -1/-1/321/181, scale (1,1), shader material.
 3. `SubViewport` child, 322x182, Nearest, update Always, `snap_2d_vertices_to_pixel` on.
 4. World under the SubViewport. `Camera2D` beside it, Drag Center, camera script.
@@ -222,5 +226,5 @@ fraction the shader already applies, and carries four open engine bugs. Leave it
   the autoload pattern, UI placement.
 - `reference/traps.md` — snapping, physics interpolation, tiling window managers,
   frame rate on multi-monitor Wayland, and the measurements behind every claim above.
-- `reference/verify.md` — the strict-typing settings and the full test harness that
-  proves the result, including the mouse measurements.
+- `reference/verify.md` — the full test harness that proves the result, including the
+  mouse measurements.

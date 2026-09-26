@@ -1,21 +1,20 @@
-extends Node
+class_name Mouse extends Node
 
-## Measures where a mouse position actually lands in this SubViewport setup.
-##
-##     godot tests/mouse.tscn
-##
-## Injects a mouse motion event at a known window pixel, converts it to a world
-## position with several candidate formulas, draws a marker there, then reads
-## the rendered frame back and reports how far the marker is from the pointer.
-## Exit code 0 = one formula is exact at every sub-pixel camera offset.
+# Measures where a mouse position actually lands in this SubViewport setup:
+#   godot tests/mouse.tscn
+# Injects a mouse motion event at a known window pixel, converts it to a world
+# position with several candidate formulas, draws a marker there, then reads the
+# rendered frame back and reports how far the marker is from the pointer. Exit code
+# 0 means one formula is exact at every sub-pixel camera offset. Output goes to
+# stderr, the channel godot-code-style allows.
 
 const GAME_SIZE: Vector2 = Vector2(320.0, 180.0)
 const MARKER_SIZE: int = 4
 const MARKER_COLOR: Color = Color(1.0, 0.0, 1.0, 1.0)
-## A marker drawn inside the SubViewport can only land on whole game pixels,
-## so half a game pixel is the best any formula can measure as.
+# A marker drawn inside the SubViewport can only land on whole game pixels, so half
+# a game pixel is the best any formula can measure as.
 const TOLERANCE: float = 0.5
-const SEARCH_RADIUS: int = 160
+const SEARCH_RADIUS: float = 160.0
 const CAMERA_POSITION: Vector2 = Vector2(40.0, 120.0)
 const OFFSETS: Array[float] = [0.0, -0.5, -0.25, 0.25, 0.5]
 const PROBES: Array[Vector2] = [
@@ -30,8 +29,8 @@ const VARIANTS: Array[String] = [
 	"+1 -cam_offset",
 ]
 
-@export var container: SubViewportContainer = null
-@export var sub_viewport: SubViewport = null
+@export var container: SubViewportContainer
+@export var sub_viewport: SubViewport
 
 var _marker: Sprite2D = null
 var _listener: MouseListener = null
@@ -44,8 +43,8 @@ var _failures: Array[String] = []
 
 
 func _ready() -> void:
-	assert(container != null, "mouse.gd: 'container' is not assigned.")
-	assert(sub_viewport != null, "mouse.gd: 'sub_viewport' is not assigned.")
+	assert(container, "mouse.gd - @export container is not set in the editor on: " + self.name)
+	assert(sub_viewport, "mouse.gd - @export sub_viewport is not set in the editor on: " + self.name)
 
 	var image: Image = Image.create_empty(MARKER_SIZE, MARKER_SIZE, false, Image.FORMAT_RGBA8)
 	image.fill(MARKER_COLOR)
@@ -60,15 +59,139 @@ func _ready() -> void:
 	sub_viewport.add_child(_listener)
 
 
-## The position the game actually receives for the injected event.
+# The position the game actually receives for the injected event.
 func _input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
 	if motion != null:
 		_event_position = motion.position
 
 
-## Injects a motion event at a window pixel and returns the root-viewport
-## position the game sees for it.
+func _process(_delta: float) -> void:
+	if _started:
+		return
+	_started = true
+	await _run()
+
+
+func _run() -> void:
+	_camera = Global.camera
+	_camera.set_physics_process(false)
+	_camera.global_position = CAMERA_POSITION
+	if Global.player != null:
+		Global.player.set_physics_process(false)
+	_material = container.material as ShaderMaterial
+
+	var probe: Image = await _render()
+	_scale = float(probe.get_width()) / GAME_SIZE.x
+	printerr(
+		(
+			"\nwindow %v   render %dx%d   scale %dx   SubViewport %v   container %v\n"
+			% [
+				get_window().size,
+				probe.get_width(),
+				probe.get_height(),
+				int(_scale),
+				sub_viewport.size,
+				container.position
+			]
+		)
+	)
+
+	await _stage_window_to_root()
+	await _stage_root_to_sub_viewport()
+	await _stage_formulas()
+	await _stage_every_offset()
+
+	printerr("")
+	if _failures.is_empty():
+		printerr("all checks passed")
+		get_tree().quit(0)
+		return
+	for failure: String in _failures:
+		printerr("FAILED: %s" % failure)
+	get_tree().quit(1)
+
+
+func _stage_window_to_root() -> void:
+	printerr("[stage 1] window pixel -> what the game receives (event.position)")
+	for window_pixel: Vector2 in PROBES:
+		var root_position: Vector2 = await _point_at(window_pixel)
+		var expected: Vector2 = window_pixel / _scale
+		_check(
+			"window %v arrives as %v" % [window_pixel, expected],
+			root_position.is_equal_approx(expected),
+			"got %v" % root_position
+		)
+
+
+func _stage_root_to_sub_viewport() -> void:
+	printerr("\n[stage 2] root viewport -> SubViewport (who adds the container's +1?)")
+	for window_pixel: Vector2 in PROBES:
+		var root_position: Vector2 = await _point_at(window_pixel)
+		var delta: Vector2 = _listener.last_position - root_position
+		_check(
+			"window %v arrives inside the SubViewport at %v" % [window_pixel, root_position + Vector2.ONE],
+			delta.is_equal_approx(Vector2.ONE),
+			"delta %v" % delta
+		)
+
+
+func _stage_formulas() -> void:
+	printerr("\n[stage 3] rendered marker error in game pixels, per formula")
+	printerr("  %-18s %s" % ["formula", "cam_offset " + str(OFFSETS)])
+	var tracks_offset: bool = true
+	for variant: String in VARIANTS:
+		var cells: Array[String] = []
+		for offset: float in OFFSETS:
+			var cam_offset: Vector2 = Vector2(offset, offset)
+			_material.set_shader_parameter(&"cam_offset", cam_offset)
+			var root_position: Vector2 = await _point_at(PROBES[0])
+			var error: Vector2 = await _error_for(variant, PROBES[0], root_position, cam_offset)
+			if is_nan(error.x):
+				cells.append(" off-screen")
+				continue
+			cells.append("%+6.2f,%+6.2f" % [error.x, error.y])
+			if variant == "+1" and !error.is_equal_approx(cam_offset):
+				tracks_offset = false
+		printerr("  %-18s %s" % [variant, " ".join(cells)])
+	_material.set_shader_parameter(&"cam_offset", Vector2.ZERO)
+	_check("the displayed image is shifted by exactly cam_offset", tracks_offset)
+
+
+func _stage_every_offset() -> void:
+	printerr("\n[stage 4] every pointer position, every sub-pixel camera offset")
+	for variant: String in ["raw", "+1 -cam_offset"]:
+		var worst: float = 0.0
+		for window_pixel: Vector2 in PROBES:
+			for offset: float in OFFSETS:
+				var cam_offset: Vector2 = Vector2(offset, -offset)
+				_material.set_shader_parameter(&"cam_offset", cam_offset)
+				var root_position: Vector2 = await _point_at(window_pixel)
+				var error: Vector2 = await _error_for(variant, window_pixel, root_position, cam_offset)
+				if is_nan(error.x):
+					worst = INF
+					continue
+				worst = maxf(worst, maxf(absf(error.x), absf(error.y)))
+		if variant == "raw":
+			_check("the naive formula is visibly wrong", worst > TOLERANCE, "worst %.2f game px" % worst)
+			continue
+		_check("%s lands on the pointer's own pixel" % variant, worst <= TOLERANCE, "worst %.2f game px" % worst)
+	_material.set_shader_parameter(&"cam_offset", Vector2.ZERO)
+
+
+func _check(label: String, condition: bool, detail: String = "") -> void:
+	if condition:
+		printerr("  ok    %s" % label)
+		return
+	var line: String = label
+	if !detail.is_empty():
+		line = "%s  (%s)" % [label, detail]
+	_failures.append(line)
+	printerr("  FAIL  %s" % line)
+
+
+# Injects a motion event at a window pixel and returns the root-viewport position
+# the game sees for it.
 func _point_at(window_pixel: Vector2) -> Vector2:
 	var motion: InputEventMouseMotion = InputEventMouseMotion.new()
 	motion.position = window_pixel
@@ -84,20 +207,16 @@ func _center() -> Vector2:
 
 func _world_for(variant: String, root_position: Vector2, cam_offset: Vector2) -> Vector2:
 	var base: Vector2 = _camera.global_position + root_position - _center()
-	match variant:
-		"raw":
-			return base
-		"+1":
-			return base + Vector2.ONE
-		"+1 +cam_offset":
-			return base + Vector2.ONE + cam_offset
-		"+1 -cam_offset":
-			return base + Vector2.ONE - cam_offset
-		"get_global_mouse_position()":
-			return _camera.get_global_mouse_position()
-		"get_global_mouse_position() -cam_offset":
-			return _camera.get_global_mouse_position() - cam_offset
-	return Vector2.ZERO
+	var world: Vector2 = Vector2.ZERO
+	if variant == "raw":
+		world = base
+	elif variant == "+1":
+		world = base + Vector2.ONE
+	elif variant == "+1 +cam_offset":
+		world = base + Vector2.ONE + cam_offset
+	elif variant == "+1 -cam_offset":
+		world = base + Vector2.ONE - cam_offset
+	return world
 
 
 func _render() -> Image:
@@ -106,13 +225,12 @@ func _render() -> Image:
 	return get_viewport().get_texture().get_image()
 
 
-## Centre of the marker in window pixels, searched in a box around the
-## pointer, or (-1, -1) if no marker pixel is in that box.
+# Centre of the marker in window pixels, searched in a box around the pointer, or
+# (-1, -1) if no marker pixel is in that box.
 func _find_marker(image: Image, around: Vector2) -> Vector2:
-	var box: Rect2i = Rect2i(
-		Vector2i(around) - Vector2i(SEARCH_RADIUS, SEARCH_RADIUS),
-		Vector2i(SEARCH_RADIUS * 2, SEARCH_RADIUS * 2)
-	).intersection(Rect2i(Vector2i.ZERO, image.get_size()))
+	var reach: Vector2 = Vector2(SEARCH_RADIUS, SEARCH_RADIUS)
+	var image_rect: Rect2 = Rect2(Vector2.ZERO, Vector2(image.get_size()))
+	var box: Rect2 = Rect2(around.floor() - reach, reach * 2.0).intersection(image_rect)
 	var region: Image = image.get_region(box)
 	region.convert(Image.FORMAT_RGBA8)
 	var bytes: PackedByteArray = region.get_data()
@@ -127,12 +245,11 @@ func _find_marker(image: Image, around: Vector2) -> Vector2:
 			count += 1
 	if count == 0:
 		return Vector2(-1.0, -1.0)
-	return sum / float(count) + Vector2(box.position)
+	return sum / float(count) + box.position
 
 
-## Error in game pixels between the drawn marker and the pointer.
-func _error_for(variant: String, window_pixel: Vector2, root_position: Vector2,
-		cam_offset: Vector2) -> Vector2:
+# Error in game pixels between the drawn marker and the pointer.
+func _error_for(variant: String, window_pixel: Vector2, root_position: Vector2, cam_offset: Vector2) -> Vector2:
 	_marker.visible = true
 	_marker.global_position = _world_for(variant, root_position, cam_offset)
 	var found: Vector2 = _find_marker(await _render(), window_pixel)
@@ -140,112 +257,3 @@ func _error_for(variant: String, window_pixel: Vector2, root_position: Vector2,
 	if found.x < 0.0:
 		return Vector2(NAN, NAN)
 	return (found - window_pixel) / _scale
-
-
-func _run() -> void:
-	_camera = Global.camera
-	_camera.set_physics_process(false)
-	_camera.global_position = CAMERA_POSITION
-	if Global.player != null:
-		Global.player.set_physics_process(false)
-	_material = container.material as ShaderMaterial
-
-	var probe: Image = await _render()
-	_scale = float(probe.get_width()) / GAME_SIZE.x
-	print("\nwindow %v   render %dx%d   scale %dx   SubViewport %v   container %v\n" % [
-		get_window().size, probe.get_width(), probe.get_height(), int(_scale),
-		sub_viewport.size, container.position
-	])
-
-	print("[stage 1] window pixel -> what the game receives (event.position)")
-	for window_pixel: Vector2 in PROBES:
-		var root_position: Vector2 = await _point_at(window_pixel)
-		var expected: Vector2 = window_pixel / _scale
-		_check("window %v arrives as %v" % [window_pixel, expected],
-			root_position.is_equal_approx(expected), "got %v" % root_position)
-
-	print("\n[stage 2] root viewport -> SubViewport (who adds the container's +1?)")
-	for window_pixel: Vector2 in PROBES:
-		var root_position: Vector2 = await _point_at(window_pixel)
-		var delta: Vector2 = _listener.last_position - root_position
-		_check("window %v arrives inside the SubViewport at %v"
-			% [window_pixel, root_position + Vector2.ONE],
-			delta.is_equal_approx(Vector2.ONE), "delta %v" % delta)
-
-	print("\n[stage 3] rendered marker error in game pixels, per formula")
-	print("  %-18s %s" % ["formula", "cam_offset " + str(OFFSETS)])
-	var tracks_offset: bool = true
-	for variant: String in VARIANTS:
-		var cells: Array[String] = []
-		for offset: float in OFFSETS:
-			var cam_offset: Vector2 = Vector2(offset, offset)
-			_material.set_shader_parameter("cam_offset", cam_offset)
-			var root_position: Vector2 = await _point_at(PROBES[0])
-			var error: Vector2 = await _error_for(variant, PROBES[0], root_position, cam_offset)
-			if is_nan(error.x):
-				cells.append(" off-screen")
-				continue
-			cells.append("%+6.2f,%+6.2f" % [error.x, error.y])
-			if variant == "+1" and not error.is_equal_approx(cam_offset):
-				tracks_offset = false
-		print("  %-18s %s" % [variant, " ".join(cells)])
-	_material.set_shader_parameter("cam_offset", Vector2.ZERO)
-	_check("the displayed image is shifted by exactly cam_offset", tracks_offset)
-
-	print("\n[stage 4] every pointer position, every sub-pixel camera offset")
-	for variant: String in ["raw", "+1 -cam_offset"]:
-		var worst: float = 0.0
-		for window_pixel: Vector2 in PROBES:
-			for offset: float in OFFSETS:
-				var cam_offset: Vector2 = Vector2(offset, -offset)
-				_material.set_shader_parameter("cam_offset", cam_offset)
-				var root_position: Vector2 = await _point_at(window_pixel)
-				var error: Vector2 = await _error_for(variant, window_pixel, root_position, cam_offset)
-				if is_nan(error.x):
-					worst = INF
-					continue
-				worst = maxf(worst, maxf(absf(error.x), absf(error.y)))
-		if variant == "raw":
-			_check("the naive formula is visibly wrong", worst > TOLERANCE,
-				"worst %.2f game px" % worst)
-			continue
-		_check("%s lands on the pointer's own pixel" % variant, worst <= TOLERANCE,
-			"worst %.2f game px" % worst)
-	_material.set_shader_parameter("cam_offset", Vector2.ZERO)
-
-	print("")
-	if _failures.is_empty():
-		print("all checks passed")
-		get_tree().quit(0)
-		return
-	for failure: String in _failures:
-		print("FAILED: %s" % failure)
-	get_tree().quit(1)
-
-
-func _check(label: String, condition: bool, detail: String = "") -> void:
-	if condition:
-		print("  ok    %s" % label)
-		return
-	var line: String = label
-	if not detail.is_empty():
-		line = "%s  (%s)" % [label, detail]
-	_failures.append(line)
-	print("  FAIL  %s" % line)
-
-
-func _process(_delta: float) -> void:
-	if _started:
-		return
-	_started = true
-	await _run()
-
-
-## Reports mouse events as they arrive inside the SubViewport.
-class MouseListener extends Node:
-	var last_position: Vector2 = Vector2.ZERO
-
-	func _input(event: InputEvent) -> void:
-		var motion: InputEventMouseMotion = event as InputEventMouseMotion
-		if motion != null:
-			last_position = motion.position

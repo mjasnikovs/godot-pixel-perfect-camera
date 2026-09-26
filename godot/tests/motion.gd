@@ -1,6 +1,7 @@
-extends Node
+class_name Motion extends Node
 
-## Logs how the player actually lands on the pixel grid while walking.
+# Logs how the player actually lands on the pixel grid while walking. Output goes
+# to stderr, the channel godot-code-style allows.
 
 const SAMPLE_FRAMES: int = 90
 
@@ -13,7 +14,7 @@ var _residuals: Array[float] = []
 func _process(_delta: float) -> void:
 	_frame += 1
 	if _frame == 1:
-		Input.action_press("move_right")
+		Input.action_press(&"move_right")
 		return
 	if _frame < 20:
 		return
@@ -35,24 +36,24 @@ func _process(_delta: float) -> void:
 	if _frame < SAMPLE_FRAMES:
 		return
 
-	Input.action_release("move_right")
+	Input.action_release(&"move_right")
+	_report()
+	get_tree().quit(0)
+
+
+func _report() -> void:
+	var physics_hz: int = Engine.physics_ticks_per_second
+	printerr("\nplayer speed: %.1f px/s at 60fps = %.3f game px per frame" % [Player.SPEED, Player.SPEED / 60.0])
+	printerr("\non-screen step sizes (player relative to camera, in game pixels):")
 	var keys: Array[int] = _steps.keys()
 	keys.sort()
-	print("\nplayer speed: %.1f px/s at 60fps = %.3f game px per frame"
-		% [Player.SPEED, Player.SPEED / 60.0])
-	print("\non-screen step sizes (player relative to camera, in game pixels):")
 	for key: int in keys:
-		print("  %+d px : %d frames" % [key, _steps[key]])
+		printerr("  %+d px : %d frames" % [key, _steps[key]])
 
 	var sum: float = 0.0
 	for value: float in _residuals:
 		sum += value
-	print("\nplayer world position is fractional on average by %.3f px"
-		% (sum / float(_residuals.size())))
-
-	var physics_hz: int = Engine.physics_ticks_per_second
-	print("\nphysics ticks/sec : %d" % physics_hz)
-	print("screen refresh Hz : %.1f" % DisplayServer.screen_get_refresh_rate())
-	print("px per physics tick: %.4f  (whole numbers do not wobble)"
-		% (Player.SPEED / float(physics_hz)))
-	get_tree().quit(0)
+	printerr("\nplayer world position is fractional on average by %.3f px" % (sum / float(_residuals.size())))
+	printerr("\nphysics ticks/sec : %d" % physics_hz)
+	printerr("screen refresh Hz : %.1f" % DisplayServer.screen_get_refresh_rate())
+	printerr("px per physics tick: %.4f  (whole numbers do not wobble)" % (Player.SPEED / float(physics_hz)))

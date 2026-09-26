@@ -42,35 +42,37 @@ Those are the two you feel.
 
 ## Run it
 
-Needs Godot 4.7 or newer.
+Needs Godot 4.7.2 or newer, and gdtoolkit 4.5.0 for `gdformat` and `gdlint`.
 
 ```sh
 cd godot
 godot                                 # play
-godot --headless tests/verify.tscn    # 29 assertions, exit 0 = pass
+godot --headless tests/verify.tscn    # 41 assertions, exit 0 = pass
 godot tests/diagnose.tscn             # measure sub-pixel steps per game pixel
 godot --headless tests/motion.tscn    # measure the followed sprite's stepping
 godot tests/fps.tscn -- screen=0      # real frame rate, per monitor
 godot tests/screenshot.tscn           # write user://screenshot.png
+godot tests/mouse.tscn                # measure where the mouse lands, exit 0 = pass
+gdformat --check scripts/ tests/
+gdlint scripts/ tests/
 ```
 
 Controls: `A`/`D` or arrows to move, `Space`/`W` to jump, `E` to shake. Walk into a
 yellow marker box and the camera parks on the marker.
 
-Every GDScript warning that matters is set to **error**, including
-`untyped_declaration`, `inferred_declaration` and all four `unsafe_*` checks. The
-project refuses to run if one fires.
+All 49 GDScript warnings are set to **error**, and every script follows
+[godot-code-style](https://github.com/mjasnikovs/godot-code-style). The project refuses
+to run if a warning fires, and nothing is suppressed.
 
 ## Read it
 
-- **[godot-pixel-camera/SKILL.md](godot-pixel-camera/SKILL.md)** — the whole technique in 190 lines. Start here.
+- **[godot-pixel-camera/SKILL.md](godot-pixel-camera/SKILL.md)** — the whole technique in 230 lines. Start here.
 - [godot-pixel-camera/reference/camera.md](godot-pixel-camera/reference/camera.md) — full camera script, camera
   triggers, shake, time effects, the autoload pattern, UI placement.
 - [godot-pixel-camera/reference/traps.md](godot-pixel-camera/reference/traps.md) — snapping, physics
   interpolation, tiling window managers, frame rate on multi-monitor Wayland, and the
   measurements behind every claim.
-- [godot-pixel-camera/reference/verify.md](godot-pixel-camera/reference/verify.md) — strict typing settings and
-  the full test harness.
+- [godot-pixel-camera/reference/verify.md](godot-pixel-camera/reference/verify.md) — the full test harness.
 
 ## Use it as an Agent Skill
 
@@ -83,7 +85,7 @@ ln -s "$PWD/godot-pixel-camera" ~/.pi/agent/skills/godot-pixel-camera # pi
 ln -s "$PWD/godot-pixel-camera" ~/.agents/skills/godot-pixel-camera   # shared
 ```
 
-It then fires on its own when you work on a Godot pixel-art camera. Only the 190-line
+It then fires on its own when you work on a Godot pixel-art camera. Only the 230-line
 `SKILL.md` sits in context; the reference files load on demand.
 
 It is also just markdown. Read it directly if you would rather not install anything.

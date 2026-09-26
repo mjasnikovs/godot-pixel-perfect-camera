@@ -1,11 +1,10 @@
-extends Node
+class_name Fps extends Node
 
-## Measures the real frame rate of the running game.
-##
-##     godot tests/fps.tscn -- screen=1 vsync=off
-##
-## A mixed-refresh multi-monitor Wayland desktop can pace a window badly, which
-## reads as stutter no matter how correct the camera is.
+# Measures the real frame rate of the running game:
+#   godot tests/fps.tscn -- screen=1 vsync=off
+# A mixed-refresh multi-monitor Wayland desktop can pace a window badly, which reads
+# as stutter no matter how correct the camera is. Output goes to stderr, the channel
+# godot-code-style allows.
 
 const WARMUP_FRAMES: int = 150
 const SAMPLE_SECONDS: float = 2.0
@@ -27,9 +26,7 @@ func _ready() -> void:
 	var window: Window = get_window()
 	if _screen < DisplayServer.get_screen_count():
 		window.current_screen = _screen
-	DisplayServer.window_set_vsync_mode(
-		DisplayServer.VSYNC_ENABLED if _vsync else DisplayServer.VSYNC_DISABLED
-	)
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if _vsync else DisplayServer.VSYNC_DISABLED)
 
 
 func _process(delta: float) -> void:
@@ -42,10 +39,7 @@ func _process(delta: float) -> void:
 	if _elapsed < SAMPLE_SECONDS:
 		return
 
-	print("  screen %d (%5.1f Hz)  vsync %-3s -> %6.1f fps" % [
-		_screen,
-		DisplayServer.screen_get_refresh_rate(_screen),
-		"on" if _vsync else "off",
-		float(_frames) / _elapsed
-	])
+	var refresh: float = DisplayServer.screen_get_refresh_rate(_screen)
+	var fps: float = float(_frames) / _elapsed
+	printerr("  screen %d (%5.1f Hz)  vsync %-3s -> %6.1f fps" % [_screen, refresh, "on" if _vsync else "off", fps])
 	get_tree().quit(0)

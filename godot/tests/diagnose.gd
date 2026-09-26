@@ -1,33 +1,106 @@
-extends Node
+class_name Diagnose extends Node
 
-## Measures two things on real rendered frames, across several configurations:
-##
-##   1. steps/pixel - how many sub-pixel positions per game pixel actually
-##      reach the screen. Higher is smoother. 1 means the shader does nothing.
-##   2. square      - is every game pixel the same size on screen at every
-##      sub-pixel offset? Anything else is smearing.
-##
-##     godot tests/diagnose.tscn
+# Measures two things on real rendered frames, across several configurations:
+#   steps/pixel - how many sub-pixel positions per game pixel actually reach the
+#                 screen. Higher is smoother. 1 means the shader does nothing.
+#   square      - whether every game pixel is the same size on screen at every
+#                 sub-pixel offset. Anything else is smearing.
+# Needs a real window. Output goes to stderr, the channel godot-code-style allows.
 
-const GAME_WIDTH: int = 320
+const GAME_WIDTH: float = 320.0
+const GAME_SIZE: Vector2 = Vector2(320.0, 180.0)
 const STEPS: int = 16
 const PROBE_OFFSETS: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
 
-@export var container: SubViewportContainer = null
+@export var container: SubViewportContainer
+@export var sub_viewport: SubViewport
 
 var _started: bool = false
 
 
+func _ready() -> void:
+	assert(container, "diagnose.gd - @export container is not set in the editor on: " + self.name)
+	assert(sub_viewport, "diagnose.gd - @export sub_viewport is not set in the editor on: " + self.name)
+
+
+func _process(_delta: float) -> void:
+	if _started:
+		return
+	_started = true
+	await _run()
+
+
+func _run() -> void:
+	var camera: PixelCamera = Global.camera
+	camera.set_physics_process(false)
+	camera.global_position = Vector2(40.0, 120.0)
+	if Global.player != null:
+		Global.player.set_physics_process(false)
+
+	var window: Window = get_window()
+	var root_rid: RID = get_viewport().get_viewport_rid()
+
+	printerr("\nwindow %v\n" % window.size)
+	printerr("  steps/pixel is measured out of the scale factor. Equal = perfectly")
+	printerr("  smooth. Half = the camera judders in half-pixel hops.\n")
+
+	await _report("A. as shipped")
+
+	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
+	await _report("B. A, root vertex snap off")
+
+	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, true)
+	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, true)
+	await _report("C. A, root transform + vertex snap")
+
+	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, false)
+	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
+	sub_viewport.snap_2d_vertices_to_pixel = true
+	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	window.content_scale_size = GAME_SIZE
+	container.scale = Vector2.ONE
+	container.position = Vector2(-1.0, -1.0)
+	await _report("D. canvas_items, base 320x180")
+
+	get_tree().quit(0)
+
+
+func _report(label: String) -> void:
+	var first: Image = await _render(Vector2.ZERO)
+	var scale_factor: int = int(float(first.get_width()) / GAME_WIDTH)
+
+	var previous: PackedByteArray = first.get_data()
+	var distinct: int = 0
+	for step: int in range(1, STEPS + 1):
+		var current: PackedByteArray = (await _render(Vector2(float(step) / float(STEPS), 0.0))).get_data()
+		if current != previous:
+			distinct += 1
+		previous = current
+
+	var worst: float = 0.0
+	for offset: float in PROBE_OFFSETS:
+		var image: Image = await _render(Vector2(offset, 0.0))
+		worst = maxf(worst, _bad_run_ratio(image, scale_factor))
+
+	var evenness: String = "square" if is_zero_approx(worst) else "UNEVEN (%.1f%% of runs)" % (worst * 100.0)
+	printerr(
+		(
+			"  %-34s render %4dx%-4d  %dx  steps/pixel %d/%d   %s"
+			% [label, first.get_width(), first.get_height(), scale_factor, distinct, scale_factor, evenness]
+		)
+	)
+
+
 func _render(offset: Vector2) -> Image:
 	var material: ShaderMaterial = container.material as ShaderMaterial
-	material.set_shader_parameter("cam_offset", offset)
+	material.set_shader_parameter(&"cam_offset", offset)
 	await RenderingServer.frame_post_draw
 	await RenderingServer.frame_post_draw
 	return get_viewport().get_texture().get_image()
 
 
-## Counts runs of identical colour along many scanlines. On a clean integer
-## upscale every run length is a multiple of the scale factor.
+# Counts runs of identical colour along many scanlines. On a clean integer upscale
+# every run length is a multiple of the scale factor.
 func _bad_run_ratio(image: Image, scale_factor: int) -> float:
 	var bad: int = 0
 	var total: int = 0
@@ -51,72 +124,3 @@ func _bad_run_ratio(image: Image, scale_factor: int) -> float:
 	if total == 0:
 		return -1.0
 	return float(bad) / float(total)
-
-
-func _report(label: String) -> void:
-	var first: Image = await _render(Vector2.ZERO)
-	var scale_factor: int = int(float(first.get_width()) / float(GAME_WIDTH))
-
-	var previous: PackedByteArray = first.get_data()
-	var distinct: int = 0
-	for step: int in range(1, STEPS + 1):
-		var current: PackedByteArray = (await _render(Vector2(float(step) / float(STEPS), 0.0))).get_data()
-		if current != previous:
-			distinct += 1
-		previous = current
-
-	var worst: float = 0.0
-	for offset: float in PROBE_OFFSETS:
-		var image: Image = await _render(Vector2(offset, 0.0))
-		worst = maxf(worst, _bad_run_ratio(image, scale_factor))
-
-	print("  %-34s render %4dx%-4d  %dx  steps/pixel %d/%d   %s" % [
-		label,
-		first.get_width(), first.get_height(),
-		scale_factor,
-		distinct, scale_factor,
-		"square" if is_zero_approx(worst) else "UNEVEN (%.1f%% of runs)" % (worst * 100.0)
-	])
-
-
-func _process(_delta: float) -> void:
-	if _started:
-		return
-	_started = true
-	await _run()
-
-
-func _run() -> void:
-	var camera: PixelCamera = Global.camera
-	camera.set_physics_process(false)
-	camera.global_position = Vector2(40, 120)
-	if Global.player != null:
-		Global.player.set_physics_process(false)
-
-	var window: Window = get_window()
-	var root_rid: RID = get_viewport().get_viewport_rid()
-	var sub_viewport: SubViewport = container.get_node("SubViewport") as SubViewport
-
-	print("\nwindow %v\n" % window.size)
-	print("  steps/pixel is measured out of the scale factor. Equal = perfectly")
-	print("  smooth. Half = the camera judders in half-pixel hops.\n")
-
-	await _report("A. as shipped (viewport stretch)")
-
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
-	await _report("B. A, root vertex snap off")
-
-	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, true)
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, true)
-	await _report("C. A, root transform + vertex snap")
-
-	RenderingServer.viewport_set_snap_2d_transforms_to_pixel(root_rid, false)
-	RenderingServer.viewport_set_snap_2d_vertices_to_pixel(root_rid, false)
-	sub_viewport.snap_2d_vertices_to_pixel = true
-	window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
-	window.content_scale_size = Vector2i(320, 180)
-	container.scale = Vector2.ONE
-	container.position = Vector2(-1.0, -1.0)
-	await _report("D. canvas_items, base 320x180")
-
-	get_tree().quit(0)

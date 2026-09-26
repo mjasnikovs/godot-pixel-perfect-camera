@@ -1,7 +1,7 @@
 extends Node
 
-## Autoload. Holds typed references that other nodes register themselves into.
-## Nothing here uses hardcoded node paths, so renaming a node cannot break it.
+# Nodes register themselves here, so no script holds a node path and renaming a
+# node cannot break anything.
 
 var camera: PixelCamera = null
 var player: Player = null

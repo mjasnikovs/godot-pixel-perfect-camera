@@ -2,7 +2,7 @@
 
 A smooth-following Camera2D that never jitters, in Godot **4.7.2**.
 
-Reference implementation of `PIXEL_PERFECT_CAMERA_SKILL.md`.
+Reference implementation of `godot-pixel-camera/SKILL.md`.
 
 ## The trick
 
@@ -31,6 +31,8 @@ godot tests/screenshot.tscn           # write a PNG to user://screenshot.png
 godot tests/diagnose.tscn             # measure sub-pixel steps per game pixel
 godot --headless tests/motion.tscn    # measure the player's on-screen stepping
 godot tests/mouse.tscn                # measure where the mouse lands, exit 0 = pass
+gdformat --check scripts/ tests/
+gdlint scripts/ tests/
 ```
 
 Controls: `A` / `D` or arrows to move, `Space` / `W` to jump, `E` to shake.
@@ -62,15 +64,16 @@ scripts/player.gd           CharacterBody2D
 scripts/global.gd           autoload, typed refs registered by the nodes
 scenes/main.tscn            SubViewportContainer + CanvasLayer + SubViewport
 scenes/world.tscn           level content
-tests/verify.gd             25 headless assertions
+tests/verify.gd             41 headless assertions
 tests/mouse.gd              mouse position -> world position, measured on real frames
+tests/mouse_listener.gd     records where mouse events land inside the SubViewport
 ```
 
 ## Strictness
 
-Every GDScript warning that matters is set to **error** in `project.godot`,
-including `untyped_declaration`, `inferred_declaration` and all four `unsafe_*`
-checks. The project will not run if a single one fires.
+All 49 GDScript warnings are set to **error** in `project.godot`, as godot-code-style
+sets them, and nothing is suppressed. The project will not run if a single one fires.
+`.gdlintrc` and `.gdformatrc` are godot-code-style's.
 
 ## Two settings to leave alone
 

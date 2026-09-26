@@ -5,51 +5,35 @@ project settings; this file is the code.
 
 ## The camera script
 
-`scripts/pixel_camera.gd`. This is the whole camera minus the time-effect methods,
-which are under Time effects below.
+`scripts/pixel_camera.gd`, whole. The time-effect methods are explained under Time
+effects below.
 
 ```gdscript
 class_name PixelCamera extends Camera2D
 
-## Follows a target smoothly while staying snapped to whole pixels.
-##
-## The camera's own position is always rounded. The leftover fraction is pushed
-## into the SubViewportContainer's shader, which slides the finished image by
-## less than one pixel. Motion looks smooth, sprites stay crisp.
-##
-## Runs in _physics_process, on the same tick as everything it follows.
-##
-## Do NOT move this to _process. The camera would then update at the display
-## refresh rate while sprites still move at the physics rate. On a 144Hz screen
-## the world would slide smoothly while the player stepped at 60Hz, and the
-## player would visibly jitter against it. Measured: that mismatch makes the
-## followed target step backwards on roughly 1 frame in 6.
-##
-## Do NOT enable Project Settings > Physics > Physics Interpolation either. It
-## would put the camera back on fractional positions, which is the exact thing
-## the shader already handles.
+# Follows a target smoothly while staying snapped to whole pixels. The camera's own
+# position is always rounded; the fraction rounding threw away goes to the container's
+# shader, which slides the finished image by less than one pixel.
+#
+# It runs in _physics_process, on the same tick as everything it follows. In _process
+# it would update at the display rate while sprites move at the physics rate, and on a
+# 144Hz screen the followed target steps backwards on roughly 1 frame in 6. Measured.
+#
+# Physics interpolation stays off: it would put the camera back on fractional
+# positions, which is exactly what the shader already handles.
 
 const SHAKE_DECAY: float = 15.0
 const NOISE_SPEED: float = 10.0
 
-## SubViewportContainer that owns the sub-pixel shader. Assigned in the scene.
-@export var viewport_container: SubViewportContainer = null
-
-## Node the camera follows on startup. Usually the player.
-@export var initial_target: Node2D = null
-
-## Lerp rate toward the target. Higher is snappier.
+@export var viewport_container: SubViewportContainer
+@export var initial_target: Node2D
 @export_range(0.5, 20.0, 0.1) var camera_speed: float = 3.0
 
 var target: Node2D = null
-
-## Sub-pixel shift the shader is applying this frame, -0.5 to +0.5.
-## Mouse-to-world conversions must subtract it.
+# The shader's sub-pixel shift this frame, -0.5 to +0.5. Mouse-to-world conversions
+# subtract it.
 var cam_offset: Vector2 = Vector2.ZERO
-
-## Current shake amount in game pixels. Decays to zero on its own.
 var shake_strength: float = 0.0
-
 var _actual_position: Vector2 = Vector2.ZERO
 var _noise_time: float = 0.0
 var _noise: FastNoiseLite = FastNoiseLite.new()
@@ -58,36 +42,20 @@ var _time_tween: Tween = null
 
 
 func _ready() -> void:
-	assert(viewport_container != null, "PixelCamera: 'viewport_container' is not assigned.")
-	assert(initial_target != null, "PixelCamera: 'initial_target' is not assigned.")
-
-	var material: Material = viewport_container.material
-	assert(material is ShaderMaterial, "PixelCamera: container material must be a ShaderMaterial.")
-	_shader_material = material as ShaderMaterial
+	assert(viewport_container, "pixel_camera.gd - @export viewport_container is not set in the editor on: " + self.name)
+	assert(initial_target, "pixel_camera.gd - @export initial_target is not set in the editor on: " + self.name)
+	var container_material: Material = viewport_container.material
+	assert(
+		container_material is ShaderMaterial,
+		"pixel_camera.gd - the container material is not a ShaderMaterial on: " + self.name
+	)
+	_shader_material = container_material as ShaderMaterial
 
 	anchor_mode = Camera2D.ANCHOR_MODE_DRAG_CENTER
 	set_target(initial_target)
 	_actual_position = initial_target.global_position
 	global_position = _actual_position.round()
-
 	Global.register_camera(self)
-
-
-func set_target(new_target: Node2D) -> void:
-	target = new_target
-
-
-func apply_shake(strength: float = 3.0) -> void:
-	shake_strength = maxf(shake_strength, strength)
-
-
-func _get_noise_offset(delta: float, strength: float) -> Vector2:
-	_noise_time += delta * NOISE_SPEED
-	# Sample two distant columns so the axes are uncorrelated.
-	return Vector2(
-		_noise.get_noise_2d(1.0, _noise_time) * strength,
-		_noise.get_noise_2d(100.0, _noise_time) * strength
-	)
 
 
 func _physics_process(delta: float) -> void:
@@ -103,18 +71,55 @@ func _physics_process(delta: float) -> void:
 		shake_strength = lerpf(shake_strength, 0.0, SHAKE_DECAY * delta)
 		shake = _get_noise_offset(delta, shake_strength)
 
-	# Everything the camera does, shake included, lands in ONE float position
-	# that gets rounded ONCE. Camera2D.offset is deliberately left at zero:
-	# it bypasses this rounding, so shake written there would move the camera
-	# by a fraction the shader does not know about, and every sprite would snap
-	# to the grid on its own. That is what makes shake look mushy.
+	# Shake included, everything lands in one float position rounded once.
+	# Camera2D.offset is applied after this rounding, so it stays at zero.
 	var desired_position: Vector2 = _actual_position + shake
 	var rounded_position: Vector2 = desired_position.round()
 
 	offset = Vector2.ZERO
 	global_position = rounded_position
 	cam_offset = rounded_position - desired_position
-	_shader_material.set_shader_parameter("cam_offset", cam_offset)
+	_shader_material.set_shader_parameter(&"cam_offset", cam_offset)
+
+
+func set_target(new_target: Node2D) -> void:
+	target = new_target
+
+
+func apply_shake(strength: float = 3.0) -> void:
+	shake_strength = maxf(shake_strength, strength)
+
+
+func apply_freeze_frame(time_scale: float = 0.1, duration: float = 0.075) -> void:
+	Engine.time_scale = time_scale
+	# ignore_time_scale = true, or the timer would be slowed down too.
+	await get_tree().create_timer(duration, true, false, true).timeout
+	Engine.time_scale = 1.0
+
+
+func slow_down_time(to_scale: float = 0.2, duration: float = 0.3) -> Tween:
+	return _tween_time_scale(to_scale, duration)
+
+
+func speed_up_time(duration: float = 0.3) -> Tween:
+	return _tween_time_scale(1.0, duration)
+
+
+func _tween_time_scale(to_scale: float, duration: float) -> Tween:
+	if is_instance_valid(_time_tween):
+		_time_tween.kill()
+	var tween: Tween = create_tween()
+	var _property_tweener: PropertyTweener = (
+		tween.tween_property(Engine, "time_scale", to_scale, duration).set_trans(Tween.TRANS_LINEAR).from_current()
+	)
+	_time_tween = tween
+	return tween
+
+
+func _get_noise_offset(delta: float, strength: float) -> Vector2:
+	_noise_time += delta * NOISE_SPEED
+	# Sample two distant columns so the axes are uncorrelated.
+	return Vector2(_noise.get_noise_2d(1.0, _noise_time) * strength, _noise.get_noise_2d(100.0, _noise_time) * strength)
 ```
 
 ### The loop, line by line
@@ -157,11 +162,7 @@ the difference goes negative whenever the camera gains on him.
 That reads as the character vibrating against a smooth background. It is not a sprite
 problem. It is the camera running on the wrong clock.
 
-The fix is one word:
-
-```gdscript
-func _physics_process(delta: float) -> void:   # not _process
-```
+The fix is one word: `_physics_process`, not `_process`.
 
 Now the camera and everything it follows move on the same tick. The whole image
 updates at 60Hz rather than 144Hz, which for pixel art at 320x180 is what you want:
@@ -177,7 +178,8 @@ for drawing, so a varying residual adds up to half a pixel of wobble.
 Pick a speed that divides evenly into the physics rate and the residual is constant:
 
 ```gdscript
-const SPEED: float = 60.0   # 60 px/s at 60Hz = exactly 1.000 px per tick
+# 60 px/s at 60Hz is exactly 1.000 px per tick.
+const SPEED: float = 60.0
 ```
 
 | Speed | Px per tick | Mean fractional residual |
@@ -208,45 +210,42 @@ is a perfectly good camera target.
 ```gdscript
 class_name CameraTrigger extends Node2D
 
-## Walk in, the camera parks on the marker. Walk out, it follows the player again.
+# Walk in, the camera parks on the marker. Walk out, it follows the player again.
 
-@export var target: Marker2D = null
-@export var trigger_area: Area2D = null
+@export var target: Marker2D
+@export var trigger_area: Area2D
 
 
 func _ready() -> void:
-	assert(target != null, "CameraTrigger: 'target' is not assigned.")
-	assert(trigger_area != null, "CameraTrigger: 'trigger_area' is not assigned.")
-
-	var entered_error: int = trigger_area.body_entered.connect(_on_body_entered)
-	var exited_error: int = trigger_area.body_exited.connect(_on_body_exited)
-	assert(entered_error == OK, "CameraTrigger: could not connect body_entered.")
-	assert(exited_error == OK, "CameraTrigger: could not connect body_exited.")
-
-
-func _on_body_entered(body: Node2D) -> void:
-	if body is not Player or Global.camera == null:
-		return
-	# Claim the camera, so overlapping triggers cannot release each other's.
-	Global.active_camera_trigger = self
-	Global.camera.set_target(target)
-
-
-func _on_body_exited(body: Node2D) -> void:
-	if body is not Player or Global.camera == null:
-		return
-	if Global.active_camera_trigger != self:
-		return
-	Global.active_camera_trigger = null
-	Global.camera.set_target(Global.player)
+	assert(target, "camera_trigger.gd - @export target is not set in the editor on: " + self.name)
+	assert(trigger_area, "camera_trigger.gd - @export trigger_area is not set in the editor on: " + self.name)
+	var _error: int = trigger_area.body_entered.connect(
+		func(body: Node2D) -> void:
+			if !(body is Player) or Global.camera == null:
+				return
+			# Claim the camera, so overlapping triggers cannot release each other's.
+			Global.active_camera_trigger = self
+			Global.camera.set_target(target)
+	)
+	_error = trigger_area.body_exited.connect(
+		func(body: Node2D) -> void:
+			if !(body is Player) or Global.camera == null:
+				return
+			if Global.active_camera_trigger != self:
+				return
+			Global.active_camera_trigger = null
+			Global.camera.set_target(Global.player)
+	)
 ```
 
 The `active_camera_trigger` guard matters. Without it, two overlapping triggers fight:
 leaving trigger A resets the camera even though the player is still inside trigger B.
 The guard means only the trigger that claimed the camera can release it.
 
-`connect()` returns an `int`, not an `Error`. Capture it or `return_value_discarded`
-fires; type it `Error` and `int_as_enum_without_cast` fires instead.
+Both reactions are inline lambdas, as godot-code-style wires every signal. `connect()`
+returns an `int`, not an `Error`: keep it in a typed `_error: int` throwaway or
+`return_value_discarded` fires, and type it `Error` and `int_as_enum_without_cast`
+fires instead.
 
 ### The trigger scene
 
@@ -283,10 +282,7 @@ func apply_shake(strength: float = 3.0) -> void:
 func _get_noise_offset(delta: float, strength: float) -> Vector2:
 	_noise_time += delta * NOISE_SPEED
 	# Sample two distant columns so the axes are uncorrelated.
-	return Vector2(
-		_noise.get_noise_2d(1.0, _noise_time) * strength,
-		_noise.get_noise_2d(100.0, _noise_time) * strength
-	)
+	return Vector2(_noise.get_noise_2d(1.0, _noise_time) * strength, _noise.get_noise_2d(100.0, _noise_time) * strength)
 ```
 
 `FastNoiseLite`, not `randf_range`. X samples the noise field at `x = 1`, Y at
@@ -329,7 +325,7 @@ Fold the shake into the position **before** the single round:
 	offset = Vector2.ZERO
 	global_position = rounded_position
 	cam_offset = rounded_position - desired_position
-	_shader_material.set_shader_parameter("cam_offset", cam_offset)
+	_shader_material.set_shader_parameter(&"cam_offset", cam_offset)
 ```
 
 Now the shake is sub-pixel smooth *and* pixel perfect, like everything else.
@@ -367,10 +363,7 @@ func _tween_time_scale(to_scale: float, duration: float) -> Tween:
 		_time_tween.kill()
 	var tween: Tween = create_tween()
 	var _property_tweener: PropertyTweener = (
-		tween
-		.tween_property(Engine, "time_scale", to_scale, duration)
-		.set_trans(Tween.TRANS_LINEAR)
-		.from_current()
+		tween.tween_property(Engine, "time_scale", to_scale, duration).set_trans(Tween.TRANS_LINEAR).from_current()
 	)
 	_time_tween = tween
 	return tween
@@ -385,8 +378,8 @@ variable or `return_value_discarded` fires.
 Callers `await` the returned tween:
 
 ```gdscript
-await Global.camera.slow_down_time().finished
-await Global.camera.speed_up_time().finished
+	await Global.camera.slow_down_time().finished
+	await Global.camera.speed_up_time().finished
 ```
 
 **Note:** `Engine.time_scale` scales `delta`, so a lower time scale means the camera
@@ -401,8 +394,8 @@ lerps more slowly too. That is usually what you want.
 ```gdscript
 extends Node
 
-## Autoload. Holds typed references that other nodes register themselves into.
-## Nothing here uses hardcoded node paths, so renaming a node cannot break it.
+# Nodes register themselves here, so no script holds a node path and renaming a
+# node cannot break anything.
 
 var camera: PixelCamera = null
 var player: Player = null
@@ -420,22 +413,15 @@ func register_player(new_player: Player) -> void:
 Nodes register themselves in `_ready`:
 
 ```gdscript
-Global.register_camera(self)   # in PixelCamera._ready
-Global.register_player(self)   # in Player._ready
+	Global.register_camera(self)  # in PixelCamera._ready
+	Global.register_player(self)  # in Player._ready
 ```
 
 ### Why not the other way
 
-The alternative is an autoload full of hardcoded paths:
-
-```gdscript
-@onready var camera: PlayerCamera = get_tree().get_root().get_node(
-	"SubViewportContainer/SubViewport/World/PlayerCamera")
-```
-
-Rename any node in that chain and the game breaks at startup. The asserts catch it,
-which is better than a random crash later, but registration avoids the problem
-entirely. It also removes the requirement that the root node be named
+The alternative is an autoload that looks each node up by its path in the tree.
+godot-code-style bans that: rename any node on the path and the game breaks at
+startup. Registration also removes the requirement that the root node be named
 `SubViewportContainer`.
 
 ---
@@ -466,9 +452,11 @@ Anything on the CanvasLayer that must track a world position has to convert by h
 Floating damage numbers, for example, end up doing this:
 
 ```gdscript
-number.global_position = Global.viewport.size + (
-	Global.camera.global_position - target.global_position + target.collision_shape_size
-) * -2 + Vector2(randf_range(-10, 10), randf_range(-10, 10))
+	number.global_position = (
+		Global.viewport.size
+		+ (Global.camera.global_position - target.global_position + target.collision_shape_size) * -2
+		+ Vector2(randf_range(-10, 10), randf_range(-10, 10))
+	)
 ```
 
 The `* -2` is that project's container `scale = (2, 2)`, inverted. With container scale
