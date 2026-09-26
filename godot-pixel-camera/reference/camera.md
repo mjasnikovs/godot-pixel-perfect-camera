@@ -95,9 +95,18 @@ func apply_shake(strength: float = 3.0) -> void:
 
 func apply_freeze_frame(time_scale: float = 0.1, duration: float = 0.075) -> void:
 	Engine.time_scale = time_scale
-	# ignore_time_scale = true, or the timer would be slowed down too.
-	await get_tree().create_timer(duration, true, false, true).timeout
-	Engine.time_scale = 1.0
+	var restore: Timer = Timer.new()
+	restore.autostart = true
+	restore.one_shot = true
+	restore.wait_time = duration
+	# Otherwise the time scale this sets slows the timer too, and at 0 it never fires.
+	restore.ignore_time_scale = true
+	var _error: int = restore.timeout.connect(
+		func() -> void:
+			Engine.time_scale = 1.0
+			restore.queue_free()
+	)
+	add_child(restore)
 
 
 func slow_down_time(to_scale: float = 0.2, duration: float = 0.3) -> Tween:
@@ -345,13 +354,27 @@ The camera is a convenient owner for hit-stop and slow motion.
 ```gdscript
 func apply_freeze_frame(time_scale: float = 0.1, duration: float = 0.075) -> void:
 	Engine.time_scale = time_scale
-	# ignore_time_scale = true, or the timer would be slowed down too.
-	await get_tree().create_timer(duration, true, false, true).timeout
-	Engine.time_scale = 1.0
+	var restore: Timer = Timer.new()
+	restore.autostart = true
+	restore.one_shot = true
+	restore.wait_time = duration
+	# Otherwise the time scale this sets slows the timer too, and at 0 it never fires.
+	restore.ignore_time_scale = true
+	var _error: int = restore.timeout.connect(
+		func() -> void:
+			Engine.time_scale = 1.0
+			restore.queue_free()
+	)
+	add_child(restore)
 ```
 
-The timer's fourth argument is `ignore_time_scale = true`. Without it the timer itself
-is slowed and never fires on schedule.
+The restore runs on a local `Timer`, not an `await`. With `missing_await` at 2 an
+awaiting method makes every caller await it, and a hit that awaited the freeze would
+sit out the whole freeze before its next line. The call returns at once and the timer
+restores the time scale on its own, then frees itself.
+
+`ignore_time_scale = true` is what lets it fire. Without it the timer runs on the very
+time scale it is waiting to restore, so it is slowed, and at a scale of 0 it never fires.
 
 ```gdscript
 func slow_down_time(to_scale: float = 0.2, duration: float = 0.3) -> Tween:
@@ -457,7 +480,7 @@ Floating damage numbers, for example, end up doing this:
 
 ```gdscript
 	number.global_position = (
-		Global.viewport.size
+		Vector2(Global.viewport.size)
 		+ (Global.camera.global_position - target.global_position + target.collision_shape_size) * -2
 		+ Vector2(randf_range(-10, 10), randf_range(-10, 10))
 	)

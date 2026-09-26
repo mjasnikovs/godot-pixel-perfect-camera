@@ -171,12 +171,13 @@ only land on whole game pixels, so a perfect formula still reads as ±0.5 whenev
 ### `tests/fps.tscn` — real frame rate
 
 ```sh
-godot tests/fps.tscn --position 2100,300 -- screen=1 vsync=on
+godot tests/fps.tscn -- screen=0 vsync=on
 ```
 
 Asserts that the game presents at least 95% of the 60 Hz physics rate, so every
 physics tick reaches the screen, and fails with the measured rate when it does not.
-Launch with `--position`, never move the window at runtime.
+`screen=N` picks the monitor; the harness moves its window there in `_ready`, before
+the warmup frames. Never move the window while it measures.
 
 It fails under `xvfb-run`: measured 30–38 fps there. It passes only on a real,
 visible display, which is what it is for.
@@ -676,7 +677,8 @@ func _process(_delta: float) -> void:
 
 	if _frame > 21:
 		var step: int = int(roundf(screen.x - _last_screen.x))
-		_steps[step] = _steps.get(step, 0) + 1
+		var count: int = _steps.get(step, 0)
+		_steps[step] = count + 1
 	_last_screen = screen
 
 	if _frame < SAMPLE_FRAMES:
@@ -714,14 +716,14 @@ func _report_failures() -> int:
 
 ### `tests/fps.gd`
 
-Measures the real frame rate. Launch with `--position X,Y` to place the window;
-never move it at runtime or the numbers are meaningless.
+Measures the real frame rate. Pick the monitor with `screen=N`; never move the window
+while it measures or the numbers are meaningless.
 
 ```gdscript
 class_name Fps extends Node
 
 # Measures the real frame rate of the running game:
-#   godot tests/fps.tscn -- screen=1 vsync=on
+#   godot tests/fps.tscn -- screen=0 vsync=on
 # Silent with exit 0 means the game presents at least one frame per physics tick, so
 # the 60Hz tick maps 1:1 onto drawn frames. A failure prints the measured rate with
 # printerr and exits 1. A mixed-refresh multi-monitor Wayland desktop can throttle an

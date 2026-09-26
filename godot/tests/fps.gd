@@ -1,7 +1,7 @@
 class_name Fps extends Node
 
 # Measures the real frame rate of the running game:
-#   godot tests/fps.tscn -- screen=1 vsync=on
+#   godot tests/fps.tscn -- screen=0 vsync=on
 # Silent with exit 0 means the game presents at least one frame per physics tick, so
 # the 60Hz tick maps 1:1 onto drawn frames. A failure prints the measured rate with
 # printerr and exits 1. A mixed-refresh multi-monitor Wayland desktop can throttle an

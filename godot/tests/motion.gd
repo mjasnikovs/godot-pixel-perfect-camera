@@ -32,7 +32,8 @@ func _process(_delta: float) -> void:
 
 	if _frame > 21:
 		var step: int = int(roundf(screen.x - _last_screen.x))
-		_steps[step] = _steps.get(step, 0) + 1
+		var count: int = _steps.get(step, 0)
+		_steps[step] = count + 1
 	_last_screen = screen
 
 	if _frame < SAMPLE_FRAMES:

@@ -84,9 +84,18 @@ func apply_shake(strength: float = 3.0) -> void:
 
 func apply_freeze_frame(time_scale: float = 0.1, duration: float = 0.075) -> void:
 	Engine.time_scale = time_scale
-	# ignore_time_scale = true, or the timer would be slowed down too.
-	await get_tree().create_timer(duration, true, false, true).timeout
-	Engine.time_scale = 1.0
+	var restore: Timer = Timer.new()
+	restore.autostart = true
+	restore.one_shot = true
+	restore.wait_time = duration
+	# Otherwise the time scale this sets slows the timer too, and at 0 it never fires.
+	restore.ignore_time_scale = true
+	var _error: int = restore.timeout.connect(
+		func() -> void:
+			Engine.time_scale = 1.0
+			restore.queue_free()
+	)
+	add_child(restore)
 
 
 func slow_down_time(to_scale: float = 0.2, duration: float = 0.3) -> Tween:

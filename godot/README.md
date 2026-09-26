@@ -10,7 +10,7 @@ The game renders at 320x180 into a SubViewport that is **322x182** — one pixel
 bigger on every side. The container sits at offset `-1, -1`, so that extra ring is
 off screen.
 
-Every frame the camera does two things:
+Every physics tick the camera does two things:
 
 1. Rounds its own position to a whole pixel.
 2. Writes the leftover fraction into a shader on the container, which slides the
@@ -25,13 +25,13 @@ six on a 144Hz screen, which looks like the sprite is broken.
 ## Run it
 
 ```sh
-godot                       # play
-godot --headless tests/verify.tscn    # the invariants
-godot tests/screenshot.tscn           # write a PNG to user://screenshot.png
-godot tests/diagnose.tscn             # 4 of 4 sub-pixel steps, square pixels
-godot --headless tests/motion.tscn    # the player never steps backwards on screen
-godot tests/mouse.tscn                # the mouse lands on its own pixel
-godot tests/fps.tscn                  # the frame rate keeps up with physics
+godot                                      # play
+godot --headless tests/verify.tscn         # the invariants
+godot tests/screenshot.tscn                # write a PNG to user://screenshot.png
+godot tests/diagnose.tscn                  # 4 of 4 sub-pixel steps, square pixels
+godot --headless tests/motion.tscn         # the player never steps backwards on screen
+godot tests/mouse.tscn                     # the mouse lands on its own pixel
+godot tests/fps.tscn -- screen=0 vsync=on  # the frame rate keeps up with physics
 gdformat --check scripts/ tests/
 gdlint scripts/ tests/
 ```

@@ -47,13 +47,13 @@ Needs Godot 4.7.2 or newer, and gdtoolkit 4.5.0 for `gdformat` and `gdlint`.
 
 ```sh
 cd godot
-godot                                 # play
-godot --headless tests/verify.tscn    # the invariants
-godot tests/diagnose.tscn             # 4 of 4 sub-pixel steps, square pixels
-godot --headless tests/motion.tscn    # the followed sprite never steps backwards
-godot tests/fps.tscn -- screen=0      # the frame rate keeps up with physics
-godot tests/screenshot.tscn           # write user://screenshot.png to look at
-godot tests/mouse.tscn                # the mouse lands on its own pixel
+godot                                      # play
+godot --headless tests/verify.tscn         # the invariants
+godot tests/diagnose.tscn                  # 4 of 4 sub-pixel steps, square pixels
+godot --headless tests/motion.tscn         # the followed sprite never steps backwards
+godot tests/fps.tscn -- screen=0 vsync=on  # the frame rate keeps up with physics
+godot tests/screenshot.tscn                # write user://screenshot.png to look at
+godot tests/mouse.tscn                     # the mouse lands on its own pixel
 gdformat --check scripts/ tests/
 gdlint scripts/ tests/
 ```

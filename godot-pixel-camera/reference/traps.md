@@ -439,8 +439,8 @@ Two things worth knowing:
 
 1. The game presents at **60 fps even on the 143.98Hz monitor**, so a 60Hz physics tick
    maps 1:1 onto drawn frames. No cadence judder.
-2. Do not benchmark by moving the window between screens at runtime. Launch with
-   `--position X,Y` instead, or your numbers are meaningless.
+2. Do not benchmark by moving the window between screens while it measures. Pick the
+   screen at launch with `screen=N` instead, or your numbers are meaningless.
 
 ### Trap: odd SubViewport dimensions
 
