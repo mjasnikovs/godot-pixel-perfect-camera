@@ -649,7 +649,7 @@ class_name Motion extends Node
 # 0 means the camera is on the physics clock and the speed is a whole number of pixels
 # per tick; a failure is printed with printerr and exits 1.
 
-# verify.yml's --quit-after equals this; below it the run ends before the report, silently.
+# verify.yml's --quit-after is twice this; a cap below it ends the run before the report, silently.
 const SAMPLE_FRAMES: int = 90
 const EPSILON: float = 0.001
 

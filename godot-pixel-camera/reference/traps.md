@@ -114,8 +114,9 @@ the ceiling.
 The old two-repo layout used the first row; this project uses the last.
 
 The harness also walks every scanline and checks how wide each run of identical colour
-is. Under `canvas_items` every run is a multiple of 4 except one partial column at the
-very edge of the screen — that is the hidden 1px border doing its job, not a defect.
+is. Under `canvas_items` every run is a multiple of 4 except the two runs the screen
+edges cut off: the image slides by up to a game pixel, so the edge run is partial. That
+is the hidden 1px border doing its job, not a defect.
 
 ### The bonus of `canvas_items`
 
@@ -172,7 +173,7 @@ property in Godot 4. It comes only from these three places.
 
 ## Texture import settings
 
-Every PNG. From `sprites/player.png.import`:
+Every PNG. The lines that matter, from `sprites/player.png.import`:
 
 ```ini
 [params]
@@ -250,8 +251,8 @@ offset_bottom = 181.0
 
 **Leave `scale` at (1, 1).** With a base viewport of 320x180 the window stretch
 already does the scaling. The common setup sets `scale = (2, 2)` here, which only
-works because its base viewport is 640x360 — the arrangement measured as half as
-smooth in 3.1.
+works because its base viewport is 640x360, the arrangement the motion harness
+measured as half as smooth.
 
 `stretch` is left off. The SubViewport draws at its own size.
 
