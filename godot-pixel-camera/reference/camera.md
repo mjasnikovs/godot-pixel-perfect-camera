@@ -32,9 +32,8 @@ const NOISE_SPEED: float = 10.0
 @export_category("Settings")
 @export_range(0.5, 20.0, 0.1) var camera_speed: float = 3.0
 
-var target: Node2D = null
-# The shader's sub-pixel shift this frame, -0.5 to +0.5. Mouse-to-world conversions
-# subtract it.
+var c_target: Node2D = null
+# The shader's sub-pixel shift this physics tick, -0.5 to +0.5; mouse-to-world conversions subtract it.
 var cam_offset: Vector2 = Vector2.ZERO
 var shake_strength: float = 0.0
 var _actual_position: Vector2 = Vector2.ZERO
@@ -62,12 +61,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if !target:
+	if !c_target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.
 	var weight: float = minf(camera_speed * delta, 1.0)
-	_actual_position = _actual_position.lerp(target.global_position, weight)
+	_actual_position = _actual_position.lerp(c_target.global_position, weight)
 
 	var shake: Vector2 = Vector2.ZERO
 	if shake_strength > 0.0:
@@ -86,7 +85,7 @@ func _physics_process(delta: float) -> void:
 
 
 func set_target(new_target: Node2D) -> void:
-	target = new_target
+	c_target = new_target
 
 
 func apply_shake(strength: float = 3.0) -> void:
@@ -142,7 +141,7 @@ func _get_noise_offset(delta: float, strength: float) -> Vector2:
 - `shake` is computed but **not** written to `Camera2D.offset`. See Screen shake below.
 - `desired_position` is the one and only float position. Everything feeds into it.
 - `rounded_position` is the one and only round.
-- `offset` is forced to zero every frame. Treat a non-zero value as a bug.
+- `offset` is forced to zero every physics tick. Treat a non-zero value as a bug.
 - The shader gets `rounded - desired`, the fraction rounding just threw away.
 
 `camera_speed = 3.0` is the lerp rate. It is `@export_range`, so tune it in the
@@ -209,10 +208,10 @@ Applies to gravity and jump velocity too, if you want it perfect.
 
 ```gdscript
 func set_target(new_target: Node2D) -> void:
-	target = new_target
+	c_target = new_target
 ```
 
-Any `Node2D` works. The camera only reads `target.global_position`. A bare `Marker2D`
+Any `Node2D` works. The camera only reads `c_target.global_position`. A bare `Marker2D`
 is a perfectly good camera target.
 
 ### The trigger

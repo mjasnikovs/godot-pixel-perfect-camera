@@ -67,7 +67,6 @@ window/stretch/scale_mode="integer"
 
 [rendering]
 textures/canvas_textures/default_texture_filter=0
-2d/snap/snap_2d_vertices_to_pixel=false
 ```
 
 `canvas_items`, **not** `viewport`. This contradicts the official pixel-art page, and
@@ -75,8 +74,9 @@ the measurement is in `reference/traps.md`. `viewport` stretch rasterises the wh
 frame at the base size, so the shader offset lands on 2 of 4 possible sub-pixel
 positions. `canvas_items` rasterises at native window resolution and gets 4 of 4.
 
-Snapping is **off** here because this applies to the root viewport, where the
-container lives. Turn it on per-node instead:
+Snapping stays at its default, **off**, because the project setting applies to the
+root viewport, where the container lives. Godot strips a default when it rewrites
+`project.godot`, so the file has no line for it. Turn it on per-node instead:
 
 ```
 # the SubViewport node
@@ -122,12 +122,12 @@ register themselves into. No script holds a node path, so a rename breaks nothin
 
 ```gdscript
 func _physics_process(delta: float) -> void:
-	if !target:
+	if !c_target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.
 	var weight: float = minf(camera_speed * delta, 1.0)
-	_actual_position = _actual_position.lerp(target.global_position, weight)
+	_actual_position = _actual_position.lerp(c_target.global_position, weight)
 
 	var shake: Vector2 = Vector2.ZERO
 	if shake_strength > 0.0:

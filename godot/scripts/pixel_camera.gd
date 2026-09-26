@@ -21,9 +21,8 @@ const NOISE_SPEED: float = 10.0
 @export_category("Settings")
 @export_range(0.5, 20.0, 0.1) var camera_speed: float = 3.0
 
-var target: Node2D = null
-# The shader's sub-pixel shift this frame, -0.5 to +0.5. Mouse-to-world conversions
-# subtract it.
+var c_target: Node2D = null
+# The shader's sub-pixel shift this physics tick, -0.5 to +0.5; mouse-to-world conversions subtract it.
 var cam_offset: Vector2 = Vector2.ZERO
 var shake_strength: float = 0.0
 var _actual_position: Vector2 = Vector2.ZERO
@@ -51,12 +50,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if !target:
+	if !c_target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.
 	var weight: float = minf(camera_speed * delta, 1.0)
-	_actual_position = _actual_position.lerp(target.global_position, weight)
+	_actual_position = _actual_position.lerp(c_target.global_position, weight)
 
 	var shake: Vector2 = Vector2.ZERO
 	if shake_strength > 0.0:
@@ -75,7 +74,7 @@ func _physics_process(delta: float) -> void:
 
 
 func set_target(new_target: Node2D) -> void:
-	target = new_target
+	c_target = new_target
 
 
 func apply_shake(strength: float = 3.0) -> void:

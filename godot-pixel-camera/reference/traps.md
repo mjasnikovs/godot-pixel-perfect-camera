@@ -31,14 +31,16 @@ dimensions even.** An odd size puts the camera centre on a half pixel forever.
 
 ---
 
-## Project settings, in full
+## Project settings
 
-Complete and measured. `project.godot`:
+The lines of `project.godot` the camera depends on, each as the file has it. Measured.
+The rest of the file does not touch the camera: the name and description, the
+`[debug]` warning block from godot-code-style, `[input]`, `[layer_names]` and the
+clear colour.
 
 ```ini
 [application]
 
-config/name="Pixel Perfect Camera"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
@@ -48,7 +50,6 @@ Global="*res://scripts/global.gd"
 
 [display]
 
-; Base viewport IS the game size. Not doubled.
 window/size/viewport_width=320
 window/size/viewport_height=180
 window/size/resizable=false
@@ -60,15 +61,12 @@ window/stretch/scale_mode="integer"
 [rendering]
 
 textures/canvas_textures/default_texture_filter=0
-; Root viewport must NOT snap, or it rounds away the shader offset.
-; Snapping goes on the SubViewport node instead.
-2d/snap/snap_2d_vertices_to_pixel=false
 ```
 
 Line by line.
 
-- **`viewport_width/height = 320x180`.** The base viewport is the game size. The
-  container therefore needs no scale of its own.
+- **`viewport_width/height = 320x180`.** The base viewport is the game size, not
+  doubled. The container therefore needs no scale of its own.
 - **`resizable=false`.** Not cosmetic. See the tiling window manager trap below.
 - **`window_width/height_override = 1280x720`.** The window the editor opens. Exactly
   4x the base.
@@ -77,10 +75,13 @@ Line by line.
 - **`stretch/scale_mode="integer"`.** The window only scales by whole numbers, so
   pixels never come out uneven.
 - **`default_texture_filter=0`.** Nearest. See the Nearest filter section.
-- **`snap_2d_vertices_to_pixel=false`.** On the *root* viewport. See the snapping trap below.
 
 `window/stretch/aspect` is left alone. Its default is already `keep`, and Godot strips
 default values when it rewrites `project.godot`, so writing it in has no effect.
+
+`2d/snap/snap_2d_vertices_to_pixel` is left alone for the same reason. Its default is
+already off, which is what the *root* viewport needs: it must not snap, or it rounds
+away the shader offset. See the snapping trap below.
 
 ### Why `canvas_items` and not `viewport`
 
@@ -297,7 +298,7 @@ a node and the editor fixes the path for you.
 ```glsl
 shader_type canvas_item;
 
-// Sub-pixel offset written every frame by PixelCamera.
+// Sub-pixel offset written every physics tick by PixelCamera.
 // The SubViewport renders 1px larger on each side, so shifting the whole
 // image by up to half a pixel never exposes a gap.
 uniform vec2 cam_offset = vec2(0.0, 0.0);
@@ -339,13 +340,8 @@ Both are project-wide. Project-wide includes the **root** viewport, and the
 `SubViewportContainer` lives in the root viewport. Its quad is the thing your shader
 nudges by a fraction of a pixel. Snapping rounds that nudge away.
 
-Set them per-viewport instead:
-
-```ini
-; project.godot - root viewport, no snapping
-2d/snap/snap_2d_vertices_to_pixel=false
-2d/snap/snap_2d_transforms_to_pixel=false
-```
+Leave both at their project default, which is off, so `project.godot` has no line for
+either. Turn vertex snapping on per-viewport instead:
 
 ```
 # the SubViewport node, in the scene

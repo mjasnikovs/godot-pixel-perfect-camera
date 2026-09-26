@@ -11,6 +11,6 @@ func _process(_delta: float) -> void:
 		return
 
 	var target_name: String = "none"
-	if camera.target:
-		target_name = camera.target.name
+	if camera.c_target:
+		target_name = camera.c_target.name
 	text = "target: %s\ncam: %v" % [target_name, camera.global_position]

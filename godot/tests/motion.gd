@@ -4,6 +4,7 @@ class_name Motion extends Node
 # 0 means the camera is on the physics clock and the speed is a whole number of pixels
 # per tick; a failure is printed with printerr and exits 1.
 
+# verify.yml's --quit-after equals this; below it the run ends before the report, silently.
 const SAMPLE_FRAMES: int = 90
 const EPSILON: float = 0.001
 
@@ -24,6 +25,8 @@ func _process(_delta: float) -> void:
 	var player: Player = Global.player
 	var camera: PixelCamera = Global.camera
 	if !player or !camera:
+		printerr("FAIL  the player or the camera never registered with Global")
+		get_tree().quit(1)
 		return
 
 	# Where the player sits inside the rendered frame, in game pixels.

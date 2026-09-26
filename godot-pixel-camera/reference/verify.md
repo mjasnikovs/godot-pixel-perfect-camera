@@ -451,16 +451,16 @@ func _check_follow() -> void:
 	)
 	_check("a sub-pixel offset was actually produced", _saw_fractional_offset, "max seen %f" % _max_subpixel)
 	# Measured 0.4992: a camera that has moved has met nearly every fraction. Far
-	# under that, the shader is not being fed each frame.
+	# under that, the shader is not being fed each physics tick.
 	_check("the sub-pixel offset reached close to half a pixel", _max_subpixel > 0.4, "max seen %f" % _max_subpixel)
-	_check("camera target is the player", Global.camera != null and Global.camera.target == Global.player)
+	_check("camera target is the player", Global.camera != null and Global.camera.c_target == Global.player)
 
 
 func _check_trigger_claimed() -> void:
 	_check(
 		"entering a trigger retargets the camera to its Marker2D",
-		Global.camera != null and Global.camera.target is Marker2D,
-		str(Global.camera.target) if Global.camera else "no camera"
+		Global.camera != null and Global.camera.c_target is Marker2D,
+		str(Global.camera.c_target) if Global.camera else "no camera"
 	)
 	_check("trigger claimed the camera", Global.active_camera_trigger != null)
 
@@ -468,8 +468,8 @@ func _check_trigger_claimed() -> void:
 func _check_trigger_released() -> void:
 	_check(
 		"leaving the trigger hands the camera back to the player",
-		Global.camera != null and Global.camera.target == Global.player,
-		str(Global.camera.target) if Global.camera else "no camera"
+		Global.camera != null and Global.camera.c_target == Global.player,
+		str(Global.camera.c_target) if Global.camera else "no camera"
 	)
 	_check("trigger released the camera", Global.active_camera_trigger == null)
 
@@ -649,6 +649,7 @@ class_name Motion extends Node
 # 0 means the camera is on the physics clock and the speed is a whole number of pixels
 # per tick; a failure is printed with printerr and exits 1.
 
+# verify.yml's --quit-after equals this; below it the run ends before the report, silently.
 const SAMPLE_FRAMES: int = 90
 const EPSILON: float = 0.001
 
@@ -669,6 +670,8 @@ func _process(_delta: float) -> void:
 	var player: Player = Global.player
 	var camera: PixelCamera = Global.camera
 	if !player or !camera:
+		printerr("FAIL  the player or the camera never registered with Global")
+		get_tree().quit(1)
 		return
 
 	# Where the player sits inside the rendered frame, in game pixels.
