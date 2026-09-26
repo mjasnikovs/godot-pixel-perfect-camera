@@ -23,6 +23,7 @@ const PROBES: Array[Vector2] = [
 	Vector2(1084.0, 596.0),
 ]
 
+@export_category("Nodes")
 @export var container: SubViewportContainer
 @export var sub_viewport: SubViewport
 
@@ -56,7 +57,7 @@ func _ready() -> void:
 # The position the game actually receives for the injected event.
 func _input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
-	if motion != null:
+	if motion:
 		_event_position = motion.position
 
 
@@ -71,7 +72,7 @@ func _run() -> void:
 	_camera = Global.camera
 	_camera.set_physics_process(false)
 	_camera.global_position = CAMERA_POSITION
-	if Global.player != null:
+	if Global.player:
 		Global.player.set_physics_process(false)
 	_material = container.material as ShaderMaterial
 

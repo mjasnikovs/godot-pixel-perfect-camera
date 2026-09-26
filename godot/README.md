@@ -84,8 +84,8 @@ sets them, and nothing is suppressed. The project will not run if a single one f
 - `rendering/2d/snap/snap_2d_transforms_to_pixel` — **off**. It jitters particles
   inside a SubViewport ([godot#98764](https://github.com/godotengine/godot/issues/98764)).
   `snap_2d_vertices_to_pixel` is on instead.
-- `physics/common/physics_interpolation` — **off**. The camera writes its transform
-  in `_process`, which the docs say produces jitter under interpolation. It would
-  also apply the same sub-pixel fraction the shader already applies.
+- `physics/common/physics_interpolation` — **off**. The camera already rounds its
+  position every physics tick, and interpolation would draw it at a fraction between
+  two rounded positions: the same sub-pixel fraction the shader already applies.
 
 `tests/verify.gd` asserts both.

@@ -6,11 +6,11 @@ class_name DebugLabel extends Label
 
 func _process(_delta: float) -> void:
 	var camera: PixelCamera = Global.camera
-	if camera == null:
+	if !camera:
 		text = "no camera"
 		return
 
 	var target_name: String = "none"
-	if camera.target != null:
+	if camera.target:
 		target_name = camera.target.name
 	text = "target: %s\ncam: %v" % [target_name, camera.global_position]

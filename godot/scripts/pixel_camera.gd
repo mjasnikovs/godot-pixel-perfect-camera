@@ -14,8 +14,11 @@ class_name PixelCamera extends Camera2D
 const SHAKE_DECAY: float = 15.0
 const NOISE_SPEED: float = 10.0
 
+@export_category("Nodes")
 @export var viewport_container: SubViewportContainer
 @export var initial_target: Node2D
+
+@export_category("Settings")
 @export_range(0.5, 20.0, 0.1) var camera_speed: float = 3.0
 
 var target: Node2D = null
@@ -48,7 +51,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if target == null:
+	if !target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.

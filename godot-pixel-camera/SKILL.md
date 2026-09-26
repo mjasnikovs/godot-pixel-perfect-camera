@@ -122,7 +122,7 @@ register themselves into. No script holds a node path, so a rename breaks nothin
 
 ```gdscript
 func _physics_process(delta: float) -> void:
-	if target == null:
+	if !target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.
@@ -165,7 +165,7 @@ Godot 4.7.2 by `tests/mouse.tscn`.
 # On the root or a CanvasLayer. event.position is already in game pixels.
 func _unhandled_input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
-	if motion == null:
+	if !motion:
 		return
 	var centre: Vector2 = Vector2(sub_viewport.size) * 0.5
 	mouse_world = camera.global_position + motion.position + Vector2.ONE - centre - camera.cam_offset

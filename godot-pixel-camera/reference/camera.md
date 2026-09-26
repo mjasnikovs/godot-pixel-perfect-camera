@@ -25,8 +25,11 @@ class_name PixelCamera extends Camera2D
 const SHAKE_DECAY: float = 15.0
 const NOISE_SPEED: float = 10.0
 
+@export_category("Nodes")
 @export var viewport_container: SubViewportContainer
 @export var initial_target: Node2D
+
+@export_category("Settings")
 @export_range(0.5, 20.0, 0.1) var camera_speed: float = 3.0
 
 var target: Node2D = null
@@ -59,7 +62,7 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if target == null:
+	if !target:
 		return
 
 	# Clamped, so a single long frame cannot overshoot the target.
@@ -212,6 +215,7 @@ class_name CameraTrigger extends Node2D
 
 # Walk in, the camera parks on the marker. Walk out, it follows the player again.
 
+@export_category("Nodes")
 @export var target: Marker2D
 @export var trigger_area: Area2D
 
@@ -221,7 +225,7 @@ func _ready() -> void:
 	assert(trigger_area, "camera_trigger.gd - @export trigger_area is not set in the editor on: " + self.name)
 	var _error: int = trigger_area.body_entered.connect(
 		func(body: Node2D) -> void:
-			if !(body is Player) or Global.camera == null:
+			if !(body is Player) or !Global.camera:
 				return
 			# Claim the camera, so overlapping triggers cannot release each other's.
 			Global.active_camera_trigger = self
@@ -229,7 +233,7 @@ func _ready() -> void:
 	)
 	_error = trigger_area.body_exited.connect(
 		func(body: Node2D) -> void:
-			if !(body is Player) or Global.camera == null:
+			if !(body is Player) or !Global.camera:
 				return
 			if Global.active_camera_trigger != self:
 				return

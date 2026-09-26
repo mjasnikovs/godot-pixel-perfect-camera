@@ -23,7 +23,7 @@ func _process(_delta: float) -> void:
 
 	var player: Player = Global.player
 	var camera: PixelCamera = Global.camera
-	if player == null or camera == null:
+	if !player or !camera:
 		return
 
 	# Where the player sits inside the rendered frame, in game pixels.

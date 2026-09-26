@@ -12,6 +12,7 @@ const GAME_WIDTH: float = 320.0
 const STEPS: int = 16
 const PROBE_OFFSETS: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
 
+@export_category("Nodes")
 @export var container: SubViewportContainer
 
 var _started: bool = false
@@ -32,7 +33,7 @@ func _run() -> void:
 	var camera: PixelCamera = Global.camera
 	camera.set_physics_process(false)
 	camera.global_position = Vector2(40.0, 120.0)
-	if Global.player != null:
+	if Global.player:
 		Global.player.set_physics_process(false)
 
 	var failures: Array[String] = []

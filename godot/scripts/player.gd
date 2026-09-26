@@ -6,6 +6,7 @@ const SPEED: float = 60.0
 const JUMP_VELOCITY: float = -180.0
 const GRAVITY: float = 500.0
 
+@export_category("Nodes")
 @export var sprite: Sprite2D
 
 
@@ -21,7 +22,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed(&"jump") and is_on_floor():
 		velocity.y = JUMP_VELOCITY
 
-	if Input.is_action_just_pressed(&"shake") and Global.camera != null:
+	if Input.is_action_just_pressed(&"shake") and Global.camera:
 		Global.camera.apply_shake(4.0)
 
 	var direction: float = Input.get_axis(&"move_left", &"move_right")

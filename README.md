@@ -24,7 +24,7 @@ Every physics tick the camera does two things.
 
 The camera hops in whole pixels. The shader hides the hop. Sprites stay crisp.
 
-## The five bugs
+## The six bugs
 
 Present in nearly every implementation you will find. Check these first when a
 pixel-art camera feels wrong.
@@ -36,6 +36,7 @@ pixel-art camera feels wrong.
 | 3 | Camera in `_process` | the followed character steps **backwards** on ~1 frame in 6 on a high-refresh screen | `_physics_process` |
 | 4 | Shake written to `Camera2D.offset` | shake looks mushy, sprites shift against each other | fold shake in before the round; `offset` stays zero |
 | 5 | Window left resizable | a tiling WM resizes it, integer scaling collapses 4x to 1x | `window/size/resizable=false` |
+| 6 | Mouse position divided by the window scale | the cursor sits twice as far from the pointer as it should | never divide; `+1` and `-cam_offset` instead |
 
 Bug 1 makes the world judder. Bug 3 makes the character judder against the world.
 Those are the two you feel.

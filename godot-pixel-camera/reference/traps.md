@@ -461,7 +461,7 @@ contributors — nothing in it touches cameras, viewports, or pixel snapping).
 - [Multiple resolutions](https://docs.godotengine.org/en/stable/tutorials/rendering/multiple_resolutions.html)
   — stretch modes, scale modes, the pixel-art recommendation this document overrides
 - [Using physics interpolation](https://docs.godotengine.org/en/stable/tutorials/physics/interpolation/using_physics_interpolation.html)
-  — the `_process` warning quoted in 15.4
+  — the `_process` warning quoted under Trap: physics interpolation above
 - [Camera2D class reference](https://docs.godotengine.org/en/stable/classes/class_camera2d.html)
   — `anchor_mode` default is `1`, Drag Center
 

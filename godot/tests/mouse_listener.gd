@@ -7,5 +7,5 @@ var last_position: Vector2 = Vector2.ZERO
 
 func _input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
-	if motion != null:
+	if motion:
 		last_position = motion.position

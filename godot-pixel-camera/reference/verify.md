@@ -21,7 +21,7 @@ Not theoretical. These all fired while building and verifying this camera.
 | `int_as_enum_without_cast` | `var e: Error = connect(...)` | `connect` returns `int`, not `Error` |
 | `unsafe_call_argument` | `int(ProjectSettings.get_setting(...))` | assign the Variant to a typed var first |
 | `integer_division` | `image.get_width() / GAME_WIDTH` | cast both to `float` |
-| `unused_variable` | a local used only for a sum | prefix with `_` |
+| `unused_variable` | a local used only for a sum | prefix it `_` |
 
 ### Patterns that keep it clean
 
@@ -46,10 +46,11 @@ The rest of the dialect is godot-code-style's.
 
 Do not trust this document. Run the tools.
 
-Every harness follows godot-code-style's harness rule. It prints nothing and exits
-0 when every bound holds. On a failure it prints each one with `printerr` and exits
-1. A script that fails to parse prints its `SCRIPT ERROR` and still exits 0, so the
-gate is both: any output, or a non-zero exit, is a failure.
+Every harness is a self-test scene, so godot-code-style's test rule (its `SKILL.md`)
+holds: it prints nothing on a pass. On a failure it prints each one with `printerr` and
+quits with exit code 1. Its CI step fails on any output other than the engine banner,
+or on a non-zero exit, because a harness that fails to parse prints the error and
+still exits 0.
 
 ```sh
 status=0
@@ -285,8 +286,9 @@ Drives the real scene for 270 frames and asserts the invariants every frame.
 class_name Verify extends Node
 
 # Headless self-test. Drives the real scene and asserts the pixel-perfect invariants
-# hold every single frame. Silent with exit 0 is a pass; a failure is printed with
-# printerr and exits 1, as godot-code-style's harness rule has it.
+# hold every single frame. A self-test scene, so godot-code-style's test rule holds:
+# it prints nothing on a pass, and on a failure it prints each one with printerr and
+# quits with exit code 1.
 
 const EPSILON: float = 0.0001
 const EXPECTED_VIEWPORT_SIZE: Vector2 = Vector2(322.0, 182.0)
@@ -295,6 +297,7 @@ const EXPECTED_GAME_SIZE: Vector2 = Vector2(320.0, 180.0)
 # loaded here by path.
 const SCRIPT_DIRECTORIES: Array[String] = ["res://scripts/", "res://tests/"]
 
+@export_category("Nodes")
 @export var container: SubViewportContainer
 @export var sub_viewport: SubViewport
 
@@ -318,7 +321,7 @@ func _process(_delta: float) -> void:
 	if _frame == 1:
 		_check_every_script_compiles()
 		_check_static_setup()
-		if Global.camera != null:
+		if Global.camera:
 			_camera_start = Global.camera.global_position
 		Input.action_press(&"move_right")
 		_phase = "walking right"
@@ -337,7 +340,7 @@ func _process(_delta: float) -> void:
 	elif _frame == 200:
 		_check_trigger_released()
 	elif _frame == 210:
-		if Global.camera != null:
+		if Global.camera:
 			Global.camera.apply_shake(6.0)
 		_phase = "shaking"
 	elif _frame == 215:
@@ -346,7 +349,7 @@ func _process(_delta: float) -> void:
 		_check(
 			"shake decays back to zero",
 			Global.camera != null and Global.camera.shake_strength < 0.05,
-			str(Global.camera.shake_strength) if Global.camera != null else "no camera"
+			str(Global.camera.shake_strength) if Global.camera else "no camera"
 		)
 	elif _frame == 270:
 		_report_and_quit()
@@ -435,7 +438,7 @@ func _check_static_setup() -> void:
 	_check("container material is a ShaderMaterial", container.material is ShaderMaterial)
 	_check("camera registered itself in Global", Global.camera != null)
 	_check("player registered itself in Global", Global.player != null)
-	if Global.camera != null:
+	if Global.camera:
 		_check("camera anchor mode is Drag Center", Global.camera.anchor_mode == Camera2D.ANCHOR_MODE_DRAG_CENTER)
 
 
@@ -456,7 +459,7 @@ func _check_trigger_claimed() -> void:
 	_check(
 		"entering a trigger retargets the camera to its Marker2D",
 		Global.camera != null and Global.camera.target is Marker2D,
-		str(Global.camera.target) if Global.camera != null else "no camera"
+		str(Global.camera.target) if Global.camera else "no camera"
 	)
 	_check("trigger claimed the camera", Global.active_camera_trigger != null)
 
@@ -465,7 +468,7 @@ func _check_trigger_released() -> void:
 	_check(
 		"leaving the trigger hands the camera back to the player",
 		Global.camera != null and Global.camera.target == Global.player,
-		str(Global.camera.target) if Global.camera != null else "no camera"
+		str(Global.camera.target) if Global.camera else "no camera"
 	)
 	_check("trigger released the camera", Global.active_camera_trigger == null)
 
@@ -474,17 +477,17 @@ func _check_shake_active() -> void:
 	_check(
 		"shake is active",
 		Global.camera != null and Global.camera.shake_strength > 0.0,
-		str(Global.camera.shake_strength) if Global.camera != null else "no camera"
+		str(Global.camera.shake_strength) if Global.camera else "no camera"
 	)
 	_check(
 		"shake goes through the rounding, not Camera2D.offset",
 		Global.camera != null and Global.camera.offset == Vector2.ZERO,
-		str(Global.camera.offset) if Global.camera != null else "no camera"
+		str(Global.camera.offset) if Global.camera else "no camera"
 	)
 
 
 func _place_player(at: Vector2) -> void:
-	if Global.player == null:
+	if !Global.player:
 		return
 	Global.player.global_position = at
 	Global.player.velocity = Vector2.ZERO
@@ -492,7 +495,7 @@ func _place_player(at: Vector2) -> void:
 
 func _check_invariants_this_frame() -> void:
 	var camera: PixelCamera = Global.camera
-	if camera == null:
+	if !camera:
 		return
 
 	var pos: Vector2 = camera.global_position
@@ -504,8 +507,8 @@ func _check_invariants_this_frame() -> void:
 
 	var material: ShaderMaterial = container.material as ShaderMaterial
 	var raw_offset: Variant = material.get_shader_parameter(&"cam_offset")
-	if raw_offset == null:
-		_failures.append("frame %d: cam_offset shader parameter is unset" % _frame)
+	if typeof(raw_offset) != TYPE_VECTOR2:
+		_failures.append("frame %d: cam_offset shader parameter is not a Vector2" % _frame)
 		return
 
 	var offset: Vector2 = raw_offset
@@ -547,6 +550,7 @@ const GAME_WIDTH: float = 320.0
 const STEPS: int = 16
 const PROBE_OFFSETS: Array[float] = [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875]
 
+@export_category("Nodes")
 @export var container: SubViewportContainer
 
 var _started: bool = false
@@ -567,7 +571,7 @@ func _run() -> void:
 	var camera: PixelCamera = Global.camera
 	camera.set_physics_process(false)
 	camera.global_position = Vector2(40.0, 120.0)
-	if Global.player != null:
+	if Global.player:
 		Global.player.set_physics_process(false)
 
 	var failures: Array[String] = []
@@ -663,7 +667,7 @@ func _process(_delta: float) -> void:
 
 	var player: Player = Global.player
 	var camera: PixelCamera = Global.camera
-	if player == null or camera == null:
+	if !player or !camera:
 		return
 
 	# Where the player sits inside the rendered frame, in game pixels.
@@ -845,6 +849,7 @@ const PROBES: Array[Vector2] = [
 	Vector2(1084.0, 596.0),
 ]
 
+@export_category("Nodes")
 @export var container: SubViewportContainer
 @export var sub_viewport: SubViewport
 
@@ -878,7 +883,7 @@ func _ready() -> void:
 # The position the game actually receives for the injected event.
 func _input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
-	if motion != null:
+	if motion:
 		_event_position = motion.position
 
 
@@ -893,7 +898,7 @@ func _run() -> void:
 	_camera = Global.camera
 	_camera.set_physics_process(false)
 	_camera.global_position = CAMERA_POSITION
-	if Global.player != null:
+	if Global.player:
 		Global.player.set_physics_process(false)
 	_material = container.material as ShaderMaterial
 
@@ -1060,7 +1065,7 @@ var last_position: Vector2 = Vector2.ZERO
 
 func _input(event: InputEvent) -> void:
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
-	if motion != null:
+	if motion:
 		last_position = motion.position
 ```
 

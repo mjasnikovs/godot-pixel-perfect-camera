@@ -41,7 +41,7 @@ jobs:
         run: |
           # All 49 warnings are errors in project.godot. This only parses what the
           # main scene reaches; the self-test below loads every script.
-          output=$(godot --headless --quit-after 120 2>&1 | grep -v '^Godot Engine' || true)
+          output=$(godot --headless --quit-after 180 2>&1 | grep -v '^Godot Engine' || true)
           if [ -n "$output" ]; then
             echo "$output"
             exit 1
