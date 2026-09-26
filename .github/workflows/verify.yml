@@ -65,10 +65,10 @@ jobs:
       - name: Check the followed sprite's stepping
         working-directory: godot
         run: |
-          # 90 is motion.gd's SAMPLE_FRAMES, the frame it quits on; 89 ends the run silently.
-          # The cap is for a motion.gd that fails to parse and so never quits.
+          # motion.gd quits itself at SAMPLE_FRAMES (90); the cap, twice that, only catches a
+          # harness that failed to parse and so never quits.
           status=0
-          output=$(godot --headless tests/motion.tscn --quit-after 90 2>&1) || status=$?
+          output=$(godot --headless tests/motion.tscn --quit-after 180 2>&1) || status=$?
           output=$(echo "$output" | grep -v '^Godot Engine' || true)
           if [ -n "$output" ] || [ "$status" != 0 ]; then
             echo "$output"
