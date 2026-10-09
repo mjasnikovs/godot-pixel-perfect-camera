@@ -487,8 +487,8 @@ var factor: int = 1
 var opened_size: Vector2i = Vector2i.ZERO
 var _game_size: Vector2i = Vector2i.ZERO
 # Title bar and borders, and where the client area sits inside them, last measured
-# while windowed. Fullscreen has none, and a window reads none in the frame it leaves
-# fullscreen.
+# while windowed. Fullscreen has none, and a window usually reads none in the frame it
+# leaves fullscreen.
 var _decorations: Vector2i = Vector2i.ZERO
 var _client_offset: Vector2i = Vector2i.ZERO
 # Frames left to wait for a first measurement of the title bar. A window sized before
@@ -735,22 +735,23 @@ and where the client area sits in it from
 pixels, with the client 1 in and 20 down.
 
 The decorations are cached from the last windowed measurement. Fullscreen has none,
-and right after `mode` goes back to windowed `get_size_with_decorations()` still
-equals `Window.size`. A zero reading is never taken as a title bar, so `set_factor`
-gets the cached one there either way; it reads the cache before it touches `mode`
-so the rule does not rest on that.
+and right after `mode` goes back to windowed `get_size_with_decorations()` usually
+still equals `Window.size`: measured under Openbox, 52 of 64 times; the other 12
+already had the 2x21 frame. A zero reading is never taken as a title bar, so
+`set_factor` gets the cached one there either way; it reads the cache before it
+touches `mode` so the rule does not rest on that.
 
-A window sized before anything was measured, at startup or straight out of a
-fullscreen start, is fitted without a title bar. So for up to `SETTLE_FRAMES` the
-autoload watches for the first measurement and, once it has one, fits and centres the
-window again if its frame does not lie on the screen, or if nothing has moved it since
-`set_factor` placed it. A window that fits and that the window manager or the player
-has moved stays where it is. The watch is the only time `_process` runs, and harnesses
+A window sized before anything was measured, at startup or straight out of a fullscreen
+start, is fitted without a title bar. So for up to `SETTLE_FRAMES` the autoload watches
+for the first measurement and, once it has one, fits and centres the window again if its
+frame does not lie on the screen, or if nothing has moved it since `set_factor` placed
+it. A window that fits and that the window manager or the player has moved stays where
+it is. The watch is the only time `_process` runs, and harnesses
 `await WindowScale.wait_until_settled()` before they measure anything. Headless, there
-is no window, and the autoload does nothing. Measured: `godot -f -- scale=9` under Openbox comes up fullscreen, asks
-for x6 with no title bar known, and settles at x5 with the title bar on the screen.
-Without the refit it stays at x6 with the title bar at y = -20. With no window
-manager the decorations are zero and the watch simply runs out.
+is no window, and the autoload does nothing. Measured: `godot -f -- scale=9` under Openbox
+comes up fullscreen, asks for x6 with no title bar known, and settles at x5 with the
+title bar on the screen. Without the refit it stays at x6 with the title bar at y = -20.
+With no window manager the decorations are zero and the watch simply runs out.
 
 A measurement counts only once `Window.size` reads back the size last asked for, and
 only if it is smaller than the game at x1 (`is_frame_reading`). The second rule is for
@@ -776,11 +777,11 @@ working while the game is paused.
 
 At startup, a window bigger than the screen allows shrinks to the largest factor that
 fits, and a window that is no whole multiple, because a window manager clamped it or
-`--resolution 1000x600` asked for it, snaps down to one: x3, 960x540. A window that starts fullscreen stays fullscreen unless `scale=` asks for a
-window, with the factor of the project's window, clamped to the screen, so `-` from a
-1280x720 project's fullscreen gives x3. A `scale=` that
-is not a whole number is ignored rather than read as 0; `scale=0` is a whole number,
-and clamps to x1.
+`--resolution 1000x600` asked for it, snaps down to one: x3, 960x540. A window that
+starts fullscreen stays fullscreen unless `scale=` asks for a window, with the factor of
+the project's window, clamped to the screen, so `-` from a 1280x720 project's fullscreen
+gives x3. A `scale=` that is not a whole number is ignored rather than read as 0;
+`scale=0` is a whole number, and clamps to x1.
 
 ### What does not change
 

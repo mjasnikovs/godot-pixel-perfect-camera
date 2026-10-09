@@ -81,9 +81,8 @@ jobs:
           # Needs a window and a window manager, so it runs under Xvfb on Mesa's software
           # renderer with Openbox, which gives the window a title bar and makes fullscreen
           # real. Godot starts only once Openbox has claimed the screen, and the run fails
-          # after 10 seconds if it never does. The engine prints
-          # driver and audio warnings there, so only the harness's FAIL lines and script
-          # errors fail the step. Each run finishes in a few seconds; timeout, unlike
+          # after 10 seconds if it never does. The engine prints driver and audio warnings
+          # there, so only the harness's FAIL lines and script errors fail the step. Each run finishes in a few seconds; timeout, unlike
           # --quit-after, exits non-zero, so a harness that fails to parse or stalls fails
           # the step. Each run is screen|engine flags|scene|harness argument: scale.tscn
           # at the project's 1280x720, scale=2, scale=9 (more than fits), scale=0, a

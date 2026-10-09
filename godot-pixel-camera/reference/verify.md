@@ -186,10 +186,11 @@ goes fullscreen and a window has no title bar, and the harness fails on "the win
 went fullscreen first". Sizes the window to every factor up to 4 that fits the
 screen, in windowed mode, and at each one asserts:
 
-- the window is windowed, exactly the game size times the factor, and on its screen
-  and centred on it with its title bar. Size means both `Window.size` and the size the content is drawn
-  at: the integer stretch letterboxes a window that is no whole multiple, so a
-  1000x600 window draws 960x540, and only the two together prove the multiple
+- the window is windowed, exactly the game size times the factor, and on its screen and
+  centred on it with its title bar. Size means both `Window.size` and the size the
+  content is drawn at: the integer stretch letterboxes a window that is no whole
+  multiple, so a 1000x600 window draws 960x540, and only the two together prove the
+  multiple
 - the root viewport is still 320x180, and the frame renders at the window size
 - the shader offset reaches the screen in exactly `factor` distinct steps per game
   pixel, and every game pixel is `factor` x `factor` screen pixels, along rows and
@@ -241,7 +242,8 @@ Every check was seen to fail on a deliberately broken copy of the project:
 - the window placed without the client offset, off centre by the title bar
 - a window of no whole multiple not snapped at an end, or `=` shrinking a window
   bigger than fits
-- the title bar measured fresh after fullscreen instead of cached
+- the title bar measured fresh after fullscreen instead of cached, caught on the runs
+  where that fresh reading is zero, which is most of them
 - a title bar taken from a reading mid-resize. That race does not come up on demand,
   so the harness checks `is_frame_reading` on the readings measured when it did:
   `Window.size` 320x180 against a decorated 640x360, with no window manager
@@ -935,7 +937,8 @@ func _process(_delta: float) -> void:
 ### `tests/scale.gd`
 
 Needs a window and a window manager; Xvfb with Openbox is enough. Sizes the window to
-x1, x2, x3 and x4 and checks each on real rendered frames. It calls the `WindowScale` autoload from `camera.md`.
+x1, x2, x3 and x4 and checks each on real rendered frames. It calls the `WindowScale`
+autoload from `camera.md`.
 
 ```gdscript
 class_name Scale extends Node

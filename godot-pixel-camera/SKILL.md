@@ -219,7 +219,7 @@ func set_factor(new_factor: int) -> int:
 usable rect. Count the title bar, or the largest factor pushes it off the top of the
 screen. The engine reports it: `get_size_with_decorations()` and
 `DisplayServer.window_get_position_with_decorations()`. Measure it while windowed and
-keep it: fullscreen has none, and a window reads none in the frame it leaves
+keep it: fullscreen has none, and a window usually reads none in the frame it leaves
 fullscreen. Until the first measurement arrives, fit without it, then fit again.
 
 Nothing else changes. `canvas_items` with `integer` picks up the new size on its own:

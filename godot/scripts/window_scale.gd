@@ -21,8 +21,8 @@ var factor: int = 1
 var opened_size: Vector2i = Vector2i.ZERO
 var _game_size: Vector2i = Vector2i.ZERO
 # Title bar and borders, and where the client area sits inside them, last measured
-# while windowed. Fullscreen has none, and a window reads none in the frame it leaves
-# fullscreen.
+# while windowed. Fullscreen has none, and a window usually reads none in the frame it
+# leaves fullscreen.
 var _decorations: Vector2i = Vector2i.ZERO
 var _client_offset: Vector2i = Vector2i.ZERO
 # Frames left to wait for a first measurement of the title bar. A window sized before
