@@ -47,6 +47,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 Global="*res://scripts/global.gd"
+WindowScale="*res://scripts/window_scale.gd"
 
 [display]
 
@@ -68,8 +69,8 @@ Line by line.
 - **`viewport_width/height = 320x180`.** The base viewport is the game size, not
   doubled. The container therefore needs no scale of its own.
 - **`resizable=false`.** Not cosmetic. See the tiling window manager trap below.
-- **`window_width/height_override = 1280x720`.** The window the editor opens. Exactly
-  4x the base.
+- **`window_width/height_override = 1280x720`.** The window the game opens at. Exactly
+  4x the base. `WindowScale` changes it at runtime, see `camera.md`.
 - **`stretch/mode="canvas_items"`.** The important one, and **not** what the official
   pixel-art page recommends. See the next heading.
 - **`stretch/scale_mode="integer"`.** The window only scales by whole numbers, so
@@ -379,6 +380,10 @@ window/size/resizable=false
 ```
 
 Omit it and the game can look broken on the very first run, for this reason alone.
+
+`resizable=false` does not lock the size against code. To offer x2 or x3, set
+`Window.size` to a whole multiple yourself; `WindowScale` in `camera.md` does that, and
+`tests/scale.tscn` checks each factor in a window.
 
 ### Trap: physics interpolation
 

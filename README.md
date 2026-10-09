@@ -54,14 +54,16 @@ godot --headless tests/motion.tscn         # the followed sprite never steps bac
 godot tests/fps.tscn -- screen=0 vsync=on  # the frame rate keeps up with physics
 godot tests/screenshot.tscn                # write user://screenshot.png to look at
 godot tests/mouse.tscn                     # the mouse lands on its own pixel
+godot tests/scale.tscn                     # x1 to x4 in a window, each one checked
 gdformat --check scripts/ tests/
 gdlint scripts/ tests/
 ```
 
 Every harness is silent and exits 0 on a pass, and prints its failures otherwise.
 
-Controls: `A`/`D` or arrows to move, `Space`/`W` to jump, `E` to shake. Walk into a
-yellow marker box and the camera parks on the marker.
+Controls: `A`/`D` or arrows to move, `Space`/`W` to jump, `E` to shake, `-`/`=` (or `+`) for a
+smaller or larger window, up to whatever fits the screen. `godot -- scale=2` starts at 2x.
+Walk into a yellow marker box and the camera parks on the marker.
 
 All 49 GDScript warnings are set to **error**, and every script follows
 [godot-code-style](https://github.com/mjasnikovs/godot-code-style). The project refuses
@@ -69,9 +71,9 @@ to run if a warning fires, and nothing is suppressed.
 
 ## Read it
 
-- **[godot-pixel-camera/SKILL.md](godot-pixel-camera/SKILL.md)** — the whole technique in 230 lines. Start here.
+- **[godot-pixel-camera/SKILL.md](godot-pixel-camera/SKILL.md)** — the whole technique in 277 lines. Start here.
 - [godot-pixel-camera/reference/camera.md](godot-pixel-camera/reference/camera.md) — full camera script, camera
-  triggers, shake, time effects, the autoload pattern, UI placement.
+  triggers, shake, time effects, the autoload pattern, window scale, UI placement.
 - [godot-pixel-camera/reference/traps.md](godot-pixel-camera/reference/traps.md) — snapping, physics
   interpolation, tiling window managers, frame rate on multi-monitor Wayland, and the
   measurements behind every claim.
@@ -88,7 +90,7 @@ ln -s "$PWD/godot-pixel-camera" ~/.pi/agent/skills/godot-pixel-camera # pi
 ln -s "$PWD/godot-pixel-camera" ~/.agents/skills/godot-pixel-camera   # shared
 ```
 
-It then fires on its own when you work on a Godot pixel-art camera. Only the 230-line
+It then fires on its own when you work on a Godot pixel-art camera. Only the 277-line
 `SKILL.md` sits in context; the reference files load on demand.
 
 It is also just markdown. Read it directly if you would rather not install anything.

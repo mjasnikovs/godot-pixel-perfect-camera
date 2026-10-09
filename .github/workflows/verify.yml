@@ -74,3 +74,78 @@ jobs:
             echo "$output"
             exit 1
           fi
+
+      - name: Check every integer window scale, and the mouse at each screen size
+        working-directory: godot
+        run: |
+          # Needs a window and a window manager, so it runs under Xvfb on Mesa's software
+          # renderer with Openbox, which gives the window a title bar and makes fullscreen
+          # real. Godot starts only once Openbox has claimed the screen, and the run fails
+          # after 10 seconds if it never does. The engine prints
+          # driver and audio warnings there, so only the harness's FAIL lines and script
+          # errors fail the step. Each run finishes in a few seconds; timeout, unlike
+          # --quit-after, exits non-zero, so a harness that fails to parse or stalls fails
+          # the step. Each run is screen|engine flags|scene|harness argument: scale.tscn
+          # at the project's 1280x720, scale=2, scale=9 (more than fits), scale=0, a
+          # malformed scale=, a start at a size that is no multiple (with and without a
+          # malformed scale=), a fullscreen start with and without scale=9, and a screen
+          # too small for 1280x720; mouse.tscn on both screens, since WindowScale resizes
+          # its window.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri openbox x11-utils
+          for run in "1920x1080||scale|" "1920x1080||scale|scale=2" "1920x1080||scale|scale=9" \
+            "1920x1080||scale|scale=0" "1920x1080||scale|scale=" \
+            "1920x1080|--resolution 1000x600|scale|" "1920x1080|--resolution 1000x600|scale|scale=" \
+            "1920x1080|-f|scale|" \
+            "1920x1080|-f|scale|scale=9" "1024x768||scale|" "1920x1080||mouse|" "1024x768||mouse|"; do
+            IFS='|' read -r screen flags scene argument <<< "$run"
+            status=0
+            output=$(timeout 300 xvfb-run -a -s "-screen 0 ${screen}x24" sh -c "
+              openbox &
+              for attempt in \$(seq 50); do
+                xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id' && break
+                sleep 0.2
+              done
+              xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id' \\
+                || { echo 'FAIL  openbox never claimed the screen'; exit 1; }
+              exec godot $flags tests/$scene.tscn -- $argument" 2>&1) || status=$?
+            failures=$(echo "$output" | grep -e '^FAIL' -e 'SCRIPT ERROR' || true)
+            if [ -n "$failures" ] || [ "$status" != 0 ]; then
+              echo "$scene.tscn, screen $screen, flags '$flags', argument '$argument':"
+              echo "$output"
+              exit 1
+            fi
+          done
+
+      - name: Check the skill shows the code as it is
+        run: |
+          # The reference docs embed every script and harness whole, each as one fenced
+          # block, so a fix to a file has to land in the docs too. player.gd and
+          # debug_label.gd are not embedded.
+          python3 - <<'EOF'
+          import glob, re, sys
+          docs = set()
+          for doc in glob.glob("godot-pixel-camera/**/*.md", recursive=True):
+              docs.update(re.findall(r"```[a-z]*\n(.*?)\n```", open(doc).read(), re.S))
+          files = sorted(
+              glob.glob("godot/scripts/*.gd") + glob.glob("godot/tests/*.gd")
+              + glob.glob("godot/tests/*.tscn") + glob.glob("godot/shaders/*.gdshader")
+          )
+          skip = {"godot/scripts/player.gd", "godot/scripts/debug_label.gd"}
+          stale = [f for f in files if f not in skip and open(f).read().rstrip("\n") not in docs]
+          for f in stale:
+              print(f"{f} differs from its copy in godot-pixel-camera/")
+          # SKILL.md quotes two functions from the scripts; each must still match word for word.
+          skill = open("godot-pixel-camera/SKILL.md").read()
+          quoted = {
+              "func set_factor(": "godot/scripts/window_scale.gd",
+              "func _physics_process(": "godot/scripts/pixel_camera.gd",
+          }
+          blocks = [re.sub(r"\A(#[^\n]*\n)+", "", block) for block in re.findall(r"```gdscript\n(.*?)\n```", skill, re.S)]
+          for signature, path in quoted.items():
+              found = [code for code in blocks if code.startswith(signature)]
+              if not found or any(code not in open(path).read() for code in found):
+                  stale.append(path)
+                  print(f"SKILL.md no longer quotes {signature!r} as {path} has it")
+          sys.exit(1 if stale else 0)
+          EOF

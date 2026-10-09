@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_scale"]
+[ext_resource type="Script" path="res://tests/scale.gd" id="2_scale"]
+
+[node name="ScaleRoot" type="Node"]
+
+[node name="SubViewportContainer" parent="." instance=ExtResource("1_scale")]
+
+[node name="Scale" type="Node" parent="." node_paths=PackedStringArray("container")]
+script = ExtResource("2_scale")
+container = NodePath("../SubViewportContainer")

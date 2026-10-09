@@ -8,7 +8,7 @@ description: >
   or when deciding whether to enable physics interpolation in a 2D game.
   Triggers: pixel perfect, pixel art camera, SubViewport, SubViewportContainer,
   camera jitter, camera judder, sub-pixel, snap_2d_vertices_to_pixel,
-  stretch mode, canvas_items, integer scaling, Camera2D smoothing.
+  stretch mode, canvas_items, integer scaling, window scale, Camera2D smoothing.
 ---
 
 # Pixel perfect camera (Godot 4)
@@ -48,7 +48,7 @@ For a 320x180 game in a 1280x720 window. One game pixel is four screen pixels.
 | Container rect | left -1, top -1, right 321, bottom 181 |
 | Container scale | **1, 1** |
 | Base viewport | **320 x 180** |
-| Window | 1280 x 720 |
+| Window | 1280 x 720, x4 — any whole multiple works, see Window scale |
 
 Keep both SubViewport dimensions **even**. Drag Center puts the camera at `size / 2`;
 an odd size parks it on a half pixel forever.
@@ -157,7 +157,7 @@ Godot 4.7.2 by `tests/mouse.tscn`.
 
 | Stage | What to do |
 |---|---|
-| Window 1280x720 → root viewport 320x180 | **nothing.** Godot has already divided `event.position` by 4 |
+| Window 1280x720 → root viewport 320x180 | **nothing.** Godot has already divided `event.position` by the window factor |
 | Root viewport → SubViewport | `+1, +1` by hand, unless the event reached a node inside the SubViewport, where the container has already added it |
 | Rounded camera → displayed image | subtract `cam_offset`, the shader's sub-pixel shift |
 
@@ -186,6 +186,52 @@ anywhere. See bug 6.
 Cursor drawing: inside the SubViewport it is a game object, nearest-scaled and moving
 with the world. On the `CanvasLayer` it is crisp and stationary. `Control` UI on the
 CanvasLayer needs no conversion at all, Control input arrives in local space.
+
+## Window scale (x2, x4)
+
+The window can be any whole multiple of the game size, in windowed mode. Size it from
+code; never let the window manager pick it (bug 5).
+
+```gdscript
+# In an autoload. Factor 2 is 640x360, factor 4 is 1280x720.
+func set_factor(new_factor: int) -> int:
+	var window: Window = get_window()
+	# Read before leaving fullscreen, while the cache still holds the windowed frame.
+	var decorations: Vector2i = _measure_decorations()
+	if decorations == Vector2i.ZERO:
+		_settle(SETTLE_FRAMES)
+	window.mode = Window.MODE_WINDOWED
+	factor = clampi(new_factor, 1, _fit(decorations))
+	var size: Vector2i = game_size() * factor
+	var usable: Rect2i = DisplayServer.screen_get_usable_rect(window.current_screen)
+	window.size = size
+	_requested_size = size
+	# window.position is the client area's. Centre the whole frame, title bar included,
+	# and if even x1 is too big for the screen, keep the title bar reachable.
+	var frame_corner: Vector2i = Vector2i((Vector2(usable.size - size - decorations) * 0.5).floor())
+	window.position = (usable.position + frame_corner).max(usable.position) + _client_offset
+	_placed_position = window.position
+	_placed = true
+	return factor
+```
+
+`_fit()` is the largest factor whose window, title bar included, fits the screen's
+usable rect. Count the title bar, or the largest factor pushes it off the top of the
+screen. The engine reports it: `get_size_with_decorations()` and
+`DisplayServer.window_get_position_with_decorations()`. Measure it while windowed and
+keep it: fullscreen has none, and a window reads none in the frame it leaves
+fullscreen. Until the first measurement arrives, fit without it, then fit again.
+
+Nothing else changes. `canvas_items` with `integer` picks up the new size on its own:
+the root viewport stays 320x180, the SubViewport 322x182, and `event.position` stays
+in game pixels, so the mouse code above holds at every factor. `resizable=false` only
+stops the user and the window manager; code can still set the size.
+
+Smoothness scales with the factor: one sub-pixel step per screen pixel, 2 of 2 at x2,
+4 of 4 at x4. At x1 there is no screen pixel to slide into, so the camera hops whole
+pixels. Measured by `tests/scale.tscn`, in a window under Xvfb and Openbox.
+
+Full script, the `scale=N` argument and the `-`/`=` keys: `reference/camera.md`.
 
 ## The six bugs
 
@@ -218,12 +264,13 @@ fraction the shader already applies, and carries four open engine bugs. Leave it
 5. `CanvasLayer` sibling of the SubViewport for UI. Small font sizes, game-space coords.
 6. Move at a whole number of pixels per physics tick (60 px/s at 60Hz = 1.000).
 7. Import sprites Lossless, no mipmaps, fix alpha border.
-8. Copy the test harness from `reference/verify.md` and keep it green.
+8. Optional: the window scale autoload from `reference/camera.md`, for x2, x3, x4.
+9. Copy the test harness from `reference/verify.md` and keep it green.
 
 ## Reference
 
 - `reference/camera.md` — full camera script, camera triggers, shake, time effects,
-  the autoload pattern, UI placement.
+  the autoload pattern, window scale, UI placement.
 - `reference/traps.md` — snapping, physics interpolation, tiling window managers,
   frame rate on multi-monitor Wayland, and the measurements behind every claim above.
 - `reference/verify.md` — the full test harness that proves the result, including the

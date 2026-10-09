@@ -16,6 +16,8 @@ const MARKER_COLOR: Color = Color(1.0, 0.0, 1.0, 1.0)
 const TOLERANCE: float = 0.5
 const SEARCH_RADIUS: float = 160.0
 const CAMERA_POSITION: Vector2 = Vector2(40.0, 120.0)
+# How long a window manager may take to apply a new size, in frames.
+const RESIZE_FRAMES: int = 60
 const OFFSETS: Array[float] = [0.0, -0.5, -0.25, 0.25, 0.5]
 const PROBES: Array[Vector2] = [
 	Vector2(640.0, 360.0),
@@ -75,6 +77,26 @@ func _run() -> void:
 	if Global.player:
 		Global.player.set_physics_process(false)
 	_material = container.material as ShaderMaterial
+
+	# The probes are window pixels of a 1280x720 window. WindowScale shrinks the window
+	# on a screen that cannot show it with its title bar; the window manager may still
+	# allow it. Waits for WindowScale first, so it cannot resize the window mid-run.
+	await WindowScale.wait_until_settled()
+	var window: Window = get_window()
+	var expected: Vector2i = Vector2i(GAME_SIZE * 4.0)
+	var usable: Rect2i = DisplayServer.screen_get_usable_rect(window.current_screen)
+	window.size = expected
+	window.position = (usable.position + Vector2i(Vector2(usable.size - expected) * 0.5)).max(usable.position)
+	# Both the window and the content drawn in it, which the integer stretch letterboxes
+	# to a whole multiple: a bigger window would shift the probes off the content.
+	for _frame: int in RESIZE_FRAMES:
+		if window.size == expected and get_viewport().get_texture().get_image().get_size() == expected:
+			break
+		await get_tree().process_frame
+	if window.size != expected or get_viewport().get_texture().get_image().get_size() != expected:
+		printerr("FAIL  the window manager would not make the window the 1280x720 the probes are in")
+		get_tree().quit(1)
+		return
 
 	var probe: Image = await _render()
 	_scale = float(probe.get_width()) / GAME_SIZE.x

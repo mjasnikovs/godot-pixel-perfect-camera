@@ -452,6 +452,356 @@ startup. Registration also removes the requirement that the root node be named
 
 ---
 
+## Window scale
+
+`scripts/window_scale.gd`, the second autoload, registered after `Global`:
+
+```ini
+[autoload]
+
+Global="*res://scripts/global.gd"
+WindowScale="*res://scripts/window_scale.gd"
+```
+
+```gdscript
+extends Node
+
+# Sizes the window to a whole multiple of the game, x2, x3, x4 and up to whatever fits
+# the screen, in windowed mode.
+#   godot -- scale=2     start at 2x
+#   - and =              step down and up while playing
+#
+# The window is not resizable, so a tiling window manager cannot pick a size that
+# collapses the integer factor. This is the one place that changes it. Nothing else
+# has to know: canvas_items stretch with integer scaling picks the new size up on its
+# own, the root viewport stays 320x180, and event.position stays in game pixels at
+# every factor.
+
+# How long to wait for the window manager's first title bar, in frames.
+const SETTLE_FRAMES: int = 60
+
+# The factor the window was last sized to.
+var factor: int = 1
+# The size the window opened at, before anything here resized it: the project's, or
+# --resolution's.
+var opened_size: Vector2i = Vector2i.ZERO
+var _game_size: Vector2i = Vector2i.ZERO
+# Title bar and borders, and where the client area sits inside them, last measured
+# while windowed. Fullscreen has none, and a window reads none in the frame it leaves
+# fullscreen.
+var _decorations: Vector2i = Vector2i.ZERO
+var _client_offset: Vector2i = Vector2i.ZERO
+# Frames left to wait for a first measurement of the title bar. A window sized before
+# its title bar was measured, at startup or straight out of fullscreen, is fitted
+# again once it is.
+var _settle_frames: int = 0
+# Where set_factor last put the window, to tell a window nobody has moved since.
+var _placed_position: Vector2i = Vector2i.ZERO
+var _placed: bool = false
+# The size set_factor last asked for. Until Window.size reads it back, the window is
+# mid-resize and its decorated size belongs to a different frame.
+var _requested_size: Vector2i = Vector2i.ZERO
+
+
+func _ready() -> void:
+	opened_size = get_window().size
+	var width: int = ProjectSettings.get_setting("display/window/size/viewport_width", 0)
+	var height: int = ProjectSettings.get_setting("display/window/size/viewport_height", 0)
+	_game_size = Vector2i(width, height)
+	# Release builds drop asserts, so a project without a base size switches this off.
+	if _game_size.x <= 0 or _game_size.y <= 0:
+		push_error("window_scale.gd - the project has no base viewport size")
+	# Headless has no window to size.
+	if _game_size.x <= 0 or _game_size.y <= 0 or DisplayServer.get_name() == "headless":
+		_settle(0)
+		set_process_unhandled_input(false)
+		return
+	# Keeps settling and the keys working while the game is paused.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	# A window that starts fullscreen, or maximized, stays so unless scale= asks for a window,
+	# and its factor is the one the project's window would have, not the screen's.
+	var windowed: bool = get_window().mode == Window.MODE_WINDOWED
+	var fit: int = max_factor()
+	factor = current_factor() if windowed else mini(_project_factor(), fit)
+	var asked: String = _scale_argument()
+	if asked.is_valid_int():
+		var _applied: int = set_factor(asked.to_int())
+	elif windowed and (factor > fit or get_window().size != _game_size * factor):
+		# The 1280x720 the project opens at can be bigger than a small screen, and a
+		# window manager or --resolution can open it at a size that is no multiple.
+		var _fitted: int = set_factor(mini(factor, fit))
+	# Nothing measured yet means the fit above left the title bar out.
+	_settle(SETTLE_FRAMES if _decorations == Vector2i.ZERO else 0)
+
+
+# Runs only while settling. Once the title bar is measured, fits and centres the window
+# again if its frame does not lie on the screen or nobody has moved it since; a window
+# the player or the window manager has moved, and that fits, stays where it is.
+func _process(_delta: float) -> void:
+	_settle(_settle_frames - 1)
+	var window: Window = get_window()
+	if window.mode != Window.MODE_WINDOWED or _measure_decorations() == Vector2i.ZERO:
+		return
+	_settle(0)
+	var frame: Rect2i = Rect2i(window.position - _client_offset, window.size + _decorations)
+	var on_screen: bool = DisplayServer.screen_get_usable_rect(window.current_screen).encloses(frame)
+	if !on_screen or (_placed and window.position == _placed_position):
+		var _refitted: int = set_factor(factor)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	# Exact, so Ctrl+= and the like stay free for the game.
+	if event.is_action_pressed(&"window_scale_up", false, true):
+		_step(1)
+	elif event.is_action_pressed(&"window_scale_down", false, true):
+		_step(-1)
+	else:
+		return
+	get_viewport().set_input_as_handled()
+
+
+# Leaves fullscreen, sizes the window to the game size times new_factor and centres it
+# on its screen. Returns the factor applied, clamped to 1..max_factor().
+func set_factor(new_factor: int) -> int:
+	var window: Window = get_window()
+	# Read before leaving fullscreen, while the cache still holds the windowed frame.
+	var decorations: Vector2i = _measure_decorations()
+	if decorations == Vector2i.ZERO:
+		_settle(SETTLE_FRAMES)
+	window.mode = Window.MODE_WINDOWED
+	factor = clampi(new_factor, 1, _fit(decorations))
+	var size: Vector2i = game_size() * factor
+	var usable: Rect2i = DisplayServer.screen_get_usable_rect(window.current_screen)
+	window.size = size
+	_requested_size = size
+	# window.position is the client area's. Centre the whole frame, title bar included,
+	# and if even x1 is too big for the screen, keep the title bar reachable.
+	var frame_corner: Vector2i = Vector2i((Vector2(usable.size - size - decorations) * 0.5).floor())
+	window.position = (usable.position + frame_corner).max(usable.position) + _client_offset
+	_placed_position = window.position
+	_placed = true
+	return factor
+
+
+# The largest factor whose window, title bar and borders included, fits the usable
+# area of the window's screen.
+func max_factor() -> int:
+	return _fit(_measure_decorations())
+
+
+# The factor the window's current size gives the integer stretch.
+func current_factor() -> int:
+	return maxi(1, _whole_factor(Vector2(get_window().size)))
+
+
+func game_size() -> Vector2i:
+	return _game_size
+
+
+# True once the window has been fitted with its title bar measured, or the window
+# manager had SETTLE_FRAMES to show one and did not.
+func is_settled() -> bool:
+	return _settle_frames <= 0
+
+
+# Returns once is_settled(), at most SETTLE_FRAMES frames later.
+func wait_until_settled() -> void:
+	while !is_settled():
+		await get_tree().process_frame
+
+
+# Steps from the window's real size, not the cached factor, so a window something
+# else resized steps from where it is. Does nothing at either end of a window, rather
+# than re-centring one the player has moved. From fullscreen it always comes back to a
+# window.
+func _step(direction: int) -> void:
+	var windowed: bool = get_window().mode == Window.MODE_WINDOWED
+	var from: int = current_factor() if windowed else factor
+	var target: int = clampi(from + direction, 1, max_factor())
+	# Up never shrinks a window already bigger than fits; down brings it back on screen.
+	if direction > 0 and target < from:
+		return
+	# A window something else left at no whole multiple snaps to one, even at an end.
+	var exact: bool = get_window().size == _game_size * from
+	if target != from or !windowed or !exact:
+		var _applied: int = set_factor(target)
+
+
+# Whether decorated - size is the window manager's frame and not a resize in flight.
+# Mid-resize the two sizes can come from different frames. Measured with no window
+# manager: Window.size still 320x180 against a decorated 640x360. Measured under
+# Openbox, after a resize something else made: 320x180 against 1922x1101. A title bar
+# and borders are never as big as the game at x1, so a reading that big is a stale one.
+func is_frame_reading(size: Vector2i, decorated: Vector2i, requested: Vector2i) -> bool:
+	var measured: Vector2i = decorated - size
+	var resized: bool = requested == Vector2i.ZERO or size == requested
+	var small: bool = measured.x < _game_size.x and measured.y < _game_size.y
+	return resized and small and measured.x >= 0 and measured.y >= 0 and measured != Vector2i.ZERO
+
+
+# Title bar and borders, which the window manager adds outside Window.size, as the
+# engine reports them. Zero without a window manager.
+func _measure_decorations() -> Vector2i:
+	var window: Window = get_window()
+	var decorated: Vector2i = window.get_size_with_decorations()
+	if window.mode == Window.MODE_WINDOWED and is_frame_reading(window.size, decorated, _requested_size):
+		_decorations = decorated - window.size
+		_client_offset = window.position - DisplayServer.window_get_position_with_decorations(window.get_window_id())
+	return _decorations
+
+
+# The factor of the window size in project.godot; 1 without an override.
+func _project_factor() -> int:
+	var width: int = ProjectSettings.get_setting("display/window/size/window_width_override", 0)
+	var height: int = ProjectSettings.get_setting("display/window/size/window_height_override", 0)
+	return maxi(1, _whole_factor(Vector2(width, height)))
+
+
+# The N of a scale=N user argument, or "" without one. A typo such as scale=x2 is not
+# a whole number, so it counts as no argument rather than as 0.
+func _scale_argument() -> String:
+	for argument: String in OS.get_cmdline_user_args():
+		var value: String = argument.trim_prefix("scale=")
+		if argument.begins_with("scale=") and value.is_valid_int():
+			return value
+	return ""
+
+
+func _settle(frames: int) -> void:
+	_settle_frames = maxi(frames, 0)
+	set_process(_settle_frames > 0)
+
+
+func _fit(decorations: Vector2i) -> int:
+	var usable: Vector2i = DisplayServer.screen_get_usable_rect(get_window().current_screen).size
+	return maxi(1, _whole_factor(Vector2(usable - decorations)))
+
+
+func _whole_factor(area: Vector2) -> int:
+	var ratio: Vector2 = (area / Vector2(game_size())).floor()
+	return int(minf(ratio.x, ratio.y))
+```
+
+Two input actions in `project.godot`, abbreviated here; bind them in the editor's
+Input Map:
+
+```ini
+[input]
+
+window_scale_down={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,...,"keycode":45,...)                 ; -
+, Object(InputEventKey,...,"physical_keycode":4194435,...)            ; keypad -
+]
+}
+window_scale_up={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,...,"keycode":61,...)                 ; =
+, Object(InputEventKey,...,"shift_pressed":true,...,"keycode":61,...) ; + as Shift+= (US)
+, Object(InputEventKey,...,"keycode":43,...)                          ; + on its own key (German)
+, Object(InputEventKey,...,"physical_keycode":4194437,...)            ; keypad +
+]
+}
+```
+
+The main-keyboard keys are bound by `keycode`, not by `physical_keycode`: on a German
+keyboard the keys printed `-` and `+` sit where a US keyboard has `/` and `]`, and
+they work. `keycode` is the label only when the label is a Godot key constant; for any
+other label Godot falls back to the US key in that position. So on German `ß`, where a
+US keyboard has `-`, also shrinks the window. Measured with `setxkbmap de`. The keypad
+keys are the same everywhere.
+
+`godot -- scale=2` starts at 640x360, in one resize: a `scale=` replaces the
+shrink-to-fit rather than following it. `-` and `=` step down and up while playing.
+
+### Why from code
+
+`window/size/resizable=false` stays. It stops the user and a tiling window manager
+from resizing the window (bug 5); it does not stop `Window.size`. So the factor
+changes only here, and only to a whole multiple.
+
+`set_factor` sets `mode` to windowed before the size, so asking for a factor from
+fullscreen drops back to a window of exactly that size. `tests/scale.tscn` checks it.
+
+`max_factor` clamps to the screen's usable rect less the title bar and borders, so `=`
+stops at the largest factor that fits and the window never runs off the screen. On a
+1920x1080 screen that is x6 with no window manager, and x5 under Openbox, whose 21px
+title bar does not fit above 1080 rows of game. Leave the decorations out and x6 puts
+the title bar at y = -20.
+
+The frame is the engine's, not a guess: its size from `get_size_with_decorations()`,
+and where the client area sits in it from
+`DisplayServer.window_get_position_with_decorations()`. Under Openbox that is 2 by 21
+pixels, with the client 1 in and 20 down.
+
+The decorations are cached from the last windowed measurement. Fullscreen has none,
+and right after `mode` goes back to windowed `get_size_with_decorations()` still
+equals `Window.size`. A zero reading is never taken as a title bar, so `set_factor`
+gets the cached one there either way; it reads the cache before it touches `mode`
+so the rule does not rest on that.
+
+A window sized before anything was measured, at startup or straight out of a
+fullscreen start, is fitted without a title bar. So for up to `SETTLE_FRAMES` the
+autoload watches for the first measurement and, once it has one, fits and centres the
+window again if its frame does not lie on the screen, or if nothing has moved it since
+`set_factor` placed it. A window that fits and that the window manager or the player
+has moved stays where it is. The watch is the only time `_process` runs, and harnesses
+`await WindowScale.wait_until_settled()` before they measure anything. Headless, there
+is no window, and the autoload does nothing. Measured: `godot -f -- scale=9` under Openbox comes up fullscreen, asks
+for x6 with no title bar known, and settles at x5 with the title bar on the screen.
+Without the refit it stays at x6 with the title bar at y = -20. With no window
+manager the decorations are zero and the watch simply runs out.
+
+A measurement counts only once `Window.size` reads back the size last asked for, and
+only if it is smaller than the game at x1 (`is_frame_reading`). The second rule is for
+resizes something else makes: under Openbox, a key pressed just after one read
+`Window.size` 320x180 against a frame of 1922x1101, and caching that difference as
+the title bar capped `=` at x1. No title bar is as big as the game.
+Mid-resize, `Window.size` can still hold the old size while
+`get_size_with_decorations()` already has the new one, and the difference is no title
+bar at all: measured with no window manager, it cached 320x180 as decorations and
+capped the window at x5 instead of x6.
+
+If even x1 and its title bar are bigger than the screen, the window goes to the
+top-left corner, so the title bar can still be reached.
+
+`-` and `=` step from the size the window really has, not the cached factor, so a
+window something else resized steps from where it is. They do nothing at either end
+of a window, so pressing past the end does not re-centre a window the player has
+moved. From fullscreen they always come back to a window. Both match exactly, so
+Ctrl+= and Ctrl+- stay free for the game, and both mark the key handled. `=` never
+shrinks a window that is already bigger than the screen allows; `-` brings it back.
+The autoload runs with `PROCESS_MODE_ALWAYS`, so the keys and the settle watch keep
+working while the game is paused.
+
+At startup, a window bigger than the screen allows shrinks to the largest factor that
+fits, and a window that is no whole multiple, because a window manager clamped it or
+`--resolution 1000x600` asked for it, snaps down to one: x3, 960x540. A window that starts fullscreen stays fullscreen unless `scale=` asks for a
+window, with the factor of the project's window, clamped to the screen, so `-` from a
+1280x720 project's fullscreen gives x3. A `scale=` that
+is not a whole number is ignored rather than read as 0; `scale=0` is a whole number,
+and clamps to x1.
+
+### What does not change
+
+Nothing in the scene. The stretch is `canvas_items` with `integer`, so Godot re-derives
+the scale from the new window size every time:
+
+| Factor | Window | Root viewport | SubViewport | Sub-pixel steps |
+|---|---|---|---|---|
+| x1 | 320 x 180 | 320 x 180 | 322 x 182 | 1 of 1 |
+| x2 | 640 x 360 | 320 x 180 | 322 x 182 | 2 of 2 |
+| x3 | 960 x 540 | 320 x 180 | 322 x 182 | 3 of 3 |
+| x4 | 1280 x 720 | 320 x 180 | 322 x 182 | 4 of 4 |
+
+Measured by `tests/scale.tscn`. `event.position` arrives on the root divided by the
+factor at every size, so the mouse code in `../SKILL.md` needs no change.
+
+At x1 the shader has no screen pixel to slide into. The camera is still correct, but
+it hops whole pixels; x2 is the smallest factor where the smoothing is visible.
+
+---
+
 ## UI lives outside the viewport
 
 `CanvasLayer` is a child of `SubViewportContainer`, **not** of `SubViewport`.
@@ -470,7 +820,7 @@ offset_top = 3.0
 theme_override_font_sizes/font_size = 8
 ```
 
-That 8 renders at 32 physical pixels. Crisp, not chunky.
+That 8 renders at 32 physical pixels at x4, 16 at x2. Crisp, not chunky.
 
 ### World-anchored UI
 
